@@ -8,3 +8,6 @@ setup(
     ext_modules=cythonize([Extension("hardwareDriver", ["hardwareDriver.pyx"],
               libraries=["bcm2835"])])
 )
+# setup(
+#     ext_modules=cythonize([Extension("arrayTest", ["arrayTest.pyx"])])
+# )

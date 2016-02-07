@@ -7,6 +7,10 @@ OS = platform.system()
 if OS == "Windows":
     print "WARNING: Only written to work for Linux"
 
+import math
+from cpython cimport array
+import array
+
 # Define external functions
 cdef extern from "sys/time.h":
     struct timeval:
@@ -98,24 +102,26 @@ MOT_B[EN]       = _RPI_GPIO_P1_08
 MOT_B[STEP]     = _RPI_GPIO_P1_10
 MOT_B[DIR]      = _RPI_GPIO_P1_11
 
+LAS             = _RPI_GPIO_P1_12
+
 # Switches
 # End stops
 cdef int XMIN, XMAX, YMIN, YMAX = range(4)
 ENDSTOP = []
-ENDSTOP[XMIN]   = _RPI_GPIO_P1_12
-ENDSTOP[XMAX]   = _RPI_GPIO_P1_13
-ENDSTOP[YMIN]   = _RPI_GPIO_P1_15
-ENDSTOP[YMAX]   = _RPI_GPIO_P1_16
+ENDSTOP[XMIN]   = _RPI_GPIO_P1_13
+ENDSTOP[XMAX]   = _RPI_GPIO_P1_15
+ENDSTOP[YMIN]   = _RPI_GPIO_P1_16
+ENDSTOP[YMAX]   = _RPI_GPIO_P1_18
 
 # Safety feet E-stop
-SAFE_FEET       = _RPI_GPIO_P1_18
+SAFE_FEET       = _RPI_GPIO_P1_19
 
 
 ############### External Interface Functions ##########################
-# All helper funcs are cdef, interfaces are def (cpdef?)
+# Interfaces are def (cpdef?) for Python access
 
 def gpio_init():
-    """ Initializes GPIO pins on Raspberry Pi. Make sure to run program
+    """ Initialize GPIO pins on Raspberry Pi. Make sure to run program
     in "sudo" to allow GPIO to run.
     :return: 0 if success, else 1
     """
@@ -128,85 +134,190 @@ def gpio_init():
     for outpin in MOT_A + MOT_B:
         bcm2835_gpio_fsel(outpin, _GPIO_FSEL_OUTP)
 
+    # Enable stepper motors
+    motor_enable()
+
     # Inputs
     for inpin in ENDSTOP:
         bcm2835_gpio_fsel(inpin, _GPIO_FSEL_INPT)
     bcm2835_gpio_fsel(SAFE_FEET, _GPIO_FSEL_INPT)
 
 
+def motor_enable():
+    """ Set stepper motor Enable pins """
+    bcm2835_gpio_set(MOT_A[EN])
+    bcm2835_gpio_set(MOT_B[EN])
+
+
+def motor_disable():
+    """ Clear stepper motor Enable pins """
+    bcm2835_gpio_clr(MOT_A[EN])
+    bcm2835_gpio_clr(MOT_B[EN])
+
+
 def gpio_close():
-    """ Closes GPIO connection. Call this when GPIO access is complete.
+    """ Close GPIO connection. Call this when GPIO access is complete.
     :return: void
     """
     bcm2835_close()
 
 
-def laser_cut(cut_spd, travel_spd, x_start, x_end, y_start, y_end, las_mask):
-    """ Performs a single straight-line motion of the laser head
+def laser_cut(cut_spd, travel_spd, x_start, x_end, y_start, y_end, las_mask,
+              step_size):
+    """ Perform a single straight-line motion of the laser head
     while firing the laser according to the mask image.
 
     Laser moves at cut_spd when laser is on, travel_spd else. Uses image bitmap
-    from las_mask. Requires gpio_init to be
-    ran first.
+    from las_mask. Requires gpio_init to be ran first.
 
     :param cut_spd: Cutting speed in mm/s
     :type: double
     :param travel_spd: Travel speed in mm/s
     :type: double
-    :param x_delta: X position change in mm
+    :param x_start: X position start in mm
     :type: double
-    :param y_delta: Y position change in mm
+    :param y_start: Y position change in mm
     :type: double
     :param las_mask: Laser engraving bitmap image
     :type: #TODO figure out data format
     """
-    # # This function will be called often, don't grab the image every time
-    #
+
+    #TODO Implement laser_cut()
+    # Algorithm:
     # 1. Create pathing step list
+    # 1a. Make pixelized line from (x_start,y_start) to (x_end,y_end)
+    # 1b. Convert line into a list of A,B coordinates (algo)
     # 2. Create laser spot list from pathing step position vs image
     # 3. Create timing list from speeds and laser spot list
     # 4. Initialize and check things, clear interrupts?
     # 5. Main movement loop, iterate on lists
     # 5a. Step X,Y, set las
-    # 5b. Check switches
+    # 5b. Poll switches
     #       if switches: Fail out, throw that exception
+    #       # This can just be polled, min speed might be 1mm/s but still
+    #       # stepping at 75ms period (13Hz)
     # 5c. Timing idle until next timing delta on list is passed
-    #
     # 6. cleanup, return
 
+    # 1. Create pathing step list
+    # 1a. Make pixelized line from (x_start,y_start) to (x_end,y_end)
+
     pass
-    #TODO Implement laser_cut()
     #TODO throws exceptions: end stop trigger, safety switch trigger, overtemp
     #TODO Diagnostics (jitter) calcs
 
 
-################## INTERNAL HELPER FUNCTIONS ################
+cpdef int read_switches():
+    """ Read values of XY endstop switches and safety feet.
 
-#TODO Change to interrupt based
-cdef bool read_switches():
-    """ Checks if any switches are active during normal operation.
-
-    Safety feet are on if any switch is UNPRESSED. Hardwired together.
-
-    :return: True if any switch is active, else False
-    :rtype: bool
-    """
-    if bcm2835_gpio_lev(SAFE_FEET):
-        return True
-
-    if read_endstops() > 0:
-        return True
-
-    return False
-
-#TODO This seems more like a sensor interface function, not for normal operation
-cdef int read_endstops():
-    """ Reads values of XY endstop switches.
-
-    :return: Bitwise 4-bit value for XMIN, XMAX, YMIN, YMAX (0b1001 => 9)
+    :return: Bitwise 5-bit value for XMIN, XMAX, YMIN, YMAX, SAFE_FEET (LSB)
+            (i.e. 0b01001 => 9: YMAX, XMIN)
     :rtype: int
     """
     cdef int retval = 0
+
     for pin in range(len(ENDSTOP)):
-        retval += bcm2835_gpio_lev(ENDSTOP[pin]) << pin
+        retval |= bcm2835_gpio_lev(ENDSTOP[pin]) << pin
+
+    retval |= bcm2835_gpio_lev(ENDSTOP[SAFE_FEET]) << 4
+
     return retval
+
+################## INTERNAL HELPER FUNCTIONS ################
+
+def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
+    cdef array.array step_arrA = array.array('i', step_listA)
+    cdef array.array step_arrB = array.array('i', step_listB)
+    cdef array.array las_arr = array.array('i', las_list)
+    cdef array.array time_arr = array.array('i', time_list)
+
+
+
+#cdef int move_laser(int step_listA[], int step_listB[], int las_list[], int time_list[]):
+    """ Perform the laser head step motion loop with precise timings.
+
+    :param step_list: List of [a,b] steps to take each increment. 0 or +/-1.
+    :param las_list: List of laser on/off values, same length as step_list. 0/1.
+    :param time_list: List of times to spend at each position in us
+
+    :return: Returns associated switch values if endstops or safety feet
+    are triggered, else returns 0.
+    :rtype: int
+    """
+
+    cdef timeval then, now
+    cdef int delta = 0
+    cdef int retval = 0
+
+    gettimeofday(&then, NULL)
+    gettimeofday(&now, NULL)
+
+    # Diagnostics
+    # cdef int deltaTimes[len(las_list)]
+    # cdef int opTimes[len(las_list)]
+    deltaTimes = range(len(las_list))
+    opTimes = range(len(las_list))
+
+    for i in range(len(time_list)):
+        deltaTimes[i] = delta #Diagnostic
+
+        # Reset times
+        then.tv_sec, then.tv_usec = now.tv_sec, now.tv_usec
+        delta = 0
+
+        # Set laser
+        bcm2835_gpio_write(LAS, las_list[i])
+
+        # Move steppers
+        # MOT A DIR positive is X, MOT B DIR positive is Y
+        bcm2835_gpio_write(MOT_A[STEP], step_listA[i] != 0)
+        bcm2835_gpio_write(MOT_A[DIR], step_listA[i] > 0)
+
+        bcm2835_gpio_write(MOT_B[STEP], step_listB[i] != 0)
+        bcm2835_gpio_write(MOT_B[DIR], step_listB[i] > 0)
+
+        #Check switches, quit if triggered
+        retval = read_switches()
+        if retval:
+            print "Switches triggered: " + bin(retval)
+            break
+
+        #Diagnostic
+        gettimeofday(&now, NULL)
+        delta = time_diff(then, now)
+        opTimes[i] = delta
+
+        # Time idle
+        while delta < time_list[i]:
+            gettimeofday(&now, NULL)
+            delta = time_diff(then, now)
+
+    bcm2835_gpio_clr(LAS)
+
+    #Diagnostic
+    errs = [deltaTimes[i+1] - time_list[i] for i in range(len(time_list)-1)]
+    meanErr = sum(errs) / float(len(errs))
+    maxErr = max(errs)
+    minErr = min(errs)
+    std_dev = math.sqrt(sum([(x - meanErr)*(x - meanErr) for x
+                             in errs]) / float(len(errs)))
+
+    mean_opTime = sum(opTimes) / len(opTimes)
+    std_dev_opTime = math.sqrt(sum([x - mean_opTime]**2 for x in opTimes)
+                        / float(len(opTimes)))
+    max_opTime = max(opTimes)
+    min_opTime = min(opTimes)
+
+    print "meanErr: {}, maxErr: {}, minErr: {}, std_dev: {}".format(
+        meanErr, maxErr, minErr, std_dev)
+    print "mean_opTime: {}, max_opTime: {}, min_opTime: {}, std_dev_opTime: {}"\
+        .format(mean_opTime, max_opTime, min_opTime, std_dev_opTime)
+
+    return retval
+
+
+cdef inline int time_diff(timeval start, timeval end):
+    """ Calculate time in microseconds between 2 timeval structs."""
+
+    return (end.tv_sec - start.tv_sec)*USEC_PER_SEC \
+            + (end.tv_usec - start.tv_usec)
