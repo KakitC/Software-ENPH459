@@ -92,17 +92,19 @@ DEF USEC_PER_SEC = 1000000
 # MOT_X is an array, with indices enums EN, STEP, DIR
 # cdef int EN, STEP, DIR = range(3)
 
-cdef enum MOT_PINS:
-    EN       = 0
-    STEP     = 1
-    DIR      = 2
+# cdef enum MOT_PINS:
+#     EN       = 0
+#     STEP     = 1
+#     DIR      = 2
+cdef int EN = 0, STEP = 1, DIR = 2
+list_of_mot_pins = (EN, STEP, DIR)
 
-MOT_A = range(3)
+cdef int MOT_A[3]
 MOT_A[EN]       = _RPI_GPIO_P1_07
 MOT_A[STEP]     = _RPI_GPIO_P1_03
 MOT_A[DIR]      = _RPI_GPIO_P1_05
 
-MOT_B = range(3)
+cdef int MOT_B[3]
 MOT_B[EN]       = _RPI_GPIO_P1_08
 MOT_B[STEP]     = _RPI_GPIO_P1_10
 MOT_B[DIR]      = _RPI_GPIO_P1_11
@@ -111,13 +113,15 @@ LAS             = _RPI_GPIO_P1_12
 
 # Switches
 # End stops
-cdef enum ENDSTOP_PINS:
-    XMIN    = 0
-    XMAX    = 1
-    YMIN    = 2
-    YMAX    = 3
+# cdef enum ENDSTOP_PINS:
+#     XMIN    = 0
+#     XMAX    = 1
+#     YMIN    = 2
+#     YMAX    = 3
+cdef int XMIN = 0, XMAX = 1, YMIN = 2, YMAX = 3
+list_of_endstop_pins = (XMIN, XMAX, YMIN, YMAX)
 
-ENDSTOP = range(4)
+cdef int ENDSTOP[4]
 ENDSTOP[XMIN]   = _RPI_GPIO_P1_13
 ENDSTOP[XMAX]   = _RPI_GPIO_P1_15
 ENDSTOP[YMIN]   = _RPI_GPIO_P1_16
@@ -141,15 +145,16 @@ def gpio_init():
         return 1
     # Set output and input pins
     # Outputs
-    for outpin in MOT_A + MOT_B:
-        bcm2835_gpio_fsel(outpin, _GPIO_FSEL_OUTP)
+    for outpin in list_of_mot_pins:
+        bcm2835_gpio_fsel(MOT_A[outpin], _GPIO_FSEL_OUTP)
+        bcm2835_gpio_fsel(MOT_B[outpin], _GPIO_FSEL_OUTP)
 
     # Enable stepper motors
     motor_enable()
 
     # Inputs
-    for inpin in ENDSTOP:
-        bcm2835_gpio_fsel(inpin, _GPIO_FSEL_INPT)
+    for inpin in list_of_endstop_pins:
+        bcm2835_gpio_fsel(ENDSTOP[inpin], _GPIO_FSEL_INPT)
     bcm2835_gpio_fsel(SAFE_FEET, _GPIO_FSEL_INPT)
     
     print "GPIO Initialization successful"
@@ -216,7 +221,6 @@ def laser_cut(cut_spd, travel_spd, x_start, x_end, y_start, y_end, las_mask,
 
     pass
     #TODO throws exceptions: end stop trigger, safety switch trigger, overtemp
-    #TODO Diagnostics (jitter) calcs
 
 
 cpdef int read_switches():
@@ -228,22 +232,22 @@ cpdef int read_switches():
     """
     cdef int retval = 0
 
-    for pin in (XMIN, XMAX, YMIN, YMAX):
+    for pin in list_of_endstop_pins:
         retval |= bcm2835_gpio_lev(ENDSTOP[pin]) << pin
 
-    retval |= bcm2835_gpio_lev(SAFE_FEET) << YMAX+1
+    retval |= bcm2835_gpio_lev(SAFE_FEET) << len(list_of_endstop_pins)
 
     return retval
 
 ################## INTERNAL HELPER FUNCTIONS ################
 
 def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
-    cdef array.array step_arrA = array.array('i', step_listA)
-    cdef array.array step_arrB = array.array('i', step_listB)
-    cdef array.array las_arr = array.array('i', las_list)
-    cdef array.array time_arr = array.array('i', time_list)
+    cdef int[:] step_arrA = array.array('i', step_listA)
+    cdef int[:] step_arrB = array.array('i', step_listB)
+    cdef int[:] las_arr = array.array('i', las_list)
+    cdef int[:] time_arr = array.array('i', time_list)
 
-
+    cdef int list_len = len(las_list)
 
 #cdef int move_laser(int step_listA[], int step_listB[], int las_list[], int time_list[]):
     """ Perform the laser head step motion loop with precise timings.
@@ -267,10 +271,11 @@ def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
     # Diagnostics
     # cdef int deltaTimes[len(las_list)]
     # cdef int opTimes[len(las_list)]
-    deltaTimes = range(len(las_list))
-    opTimes = range(len(las_list))
+    cdef int[:] deltaTimes = array.array('i', range(list_len))
+    cdef int[:] opTimes = array.array('i', range(list_len))
 
-    for i in range(len(time_list)):
+    cdef int i = 0
+    while i < list_len:
         deltaTimes[i] = delta #Diagnostic
 
         # Reset times
@@ -278,15 +283,19 @@ def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
         delta = 0
 
         # Set laser
-        bcm2835_gpio_write(LAS, las_list[i])
+        bcm2835_gpio_write(LAS, las_arr[i])
 
         # Move steppers
         # MOT A DIR positive is X, MOT B DIR positive is Y
-        bcm2835_gpio_write(MOT_A[STEP], step_listA[i] != 0)
-        bcm2835_gpio_write(MOT_A[DIR], step_listA[i] > 0)
+        if step_arrA[i] != 0:
+            bcm2835_gpio_set(MOT_A[STEP])
+            bcm2835_gpio_clr(MOT_A[STEP])
+        bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
 
-        bcm2835_gpio_write(MOT_B[STEP], step_listB[i] != 0)
-        bcm2835_gpio_write(MOT_B[DIR], step_listB[i] > 0)
+        if step_arrB[i] != 0:
+            bcm2835_gpio_set(MOT_B[STEP])
+            bcm2835_gpio_clr(MOT_B[STEP])
+        bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
 
         #Check switches, quit if triggered
         retval = read_switches()
@@ -300,23 +309,25 @@ def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
         opTimes[i] = delta
 
         # Time idle
-        while delta < time_list[i]:
+        while delta < time_arr[i]:
             gettimeofday(&now, NULL)
             delta = time_diff(then, now)
+
+        i += 1 #increment for loop
 
     bcm2835_gpio_clr(LAS)
 
     #Diagnostic
-    errs = [deltaTimes[i+1] - time_list[i] for i in range(len(time_list)-1)]
+    errs = [deltaTimes[i+1] - time_list[i] for i in range(list_len-1)]
     meanErr = sum(errs) / float(len(errs))
     maxErr = max(errs)
     minErr = min(errs)
     std_dev = math.sqrt(sum([(x - meanErr)*(x - meanErr) for x
                              in errs]) / float(len(errs)))
 
-    mean_opTime = sum(opTimes) / len(opTimes)
+    mean_opTime = sum(opTimes) / list_len
     std_dev_opTime = math.sqrt(sum([(x - mean_opTime)**2 for x in opTimes])
-                        / float(len(opTimes)))
+                        / float(list_len))
     max_opTime = max(opTimes)
     min_opTime = min(opTimes)
 
