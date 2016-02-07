@@ -151,6 +151,8 @@ def gpio_init():
     for inpin in ENDSTOP:
         bcm2835_gpio_fsel(inpin, _GPIO_FSEL_INPT)
     bcm2835_gpio_fsel(SAFE_FEET, _GPIO_FSEL_INPT)
+    
+    print "GPIO Initialization successful"
 
 
 def motor_enable():
@@ -226,10 +228,10 @@ cpdef int read_switches():
     """
     cdef int retval = 0
 
-    for pin in range(len(ENDSTOP)):
+    for pin in (XMIN, XMAX, YMIN, YMAX):
         retval |= bcm2835_gpio_lev(ENDSTOP[pin]) << pin
 
-    retval |= bcm2835_gpio_lev(ENDSTOP[SAFE_FEET]) << 4
+    retval |= bcm2835_gpio_lev(SAFE_FEET) << YMAX+1
 
     return retval
 
@@ -313,7 +315,7 @@ def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
                              in errs]) / float(len(errs)))
 
     mean_opTime = sum(opTimes) / len(opTimes)
-    std_dev_opTime = math.sqrt(sum([x - mean_opTime]**2 for x in opTimes)
+    std_dev_opTime = math.sqrt(sum([(x - mean_opTime)**2 for x in opTimes])
                         / float(len(opTimes)))
     max_opTime = max(opTimes)
     min_opTime = min(opTimes)

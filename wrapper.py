@@ -11,12 +11,13 @@ __author__ = 'kakit'
 import platform
 OS = platform.system()
 
-#Compile everything
+# # Compile everything
 import os
 if OS == "Windows":
     os.system("build.bat")
 else:
-    os.system("sh build.sh")
+#    os.system("sh build.sh")
+    os.nice(-20)
 
 #test
 #import arrayTest
@@ -27,4 +28,6 @@ step_listA = [1 for _ in range(1000)]
 step_listB = [1 for _ in range(1000)]
 las_list = [x%2 for x in range(1000)]
 time_list = [1000 for _ in range(1000)]
+
+hd.gpio_init()
 hd.move_laser_wrapper(step_listA, step_listB, las_list, time_list)
