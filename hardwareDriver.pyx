@@ -78,8 +78,8 @@ cdef extern from "bcm2835.h":
     int _RPI_GPIO_P1_26 "RPI_GPIO_P1_26"        # =  7, # CE1 when SPI0 in use
 
     # Port function select modes for bcm2835_gpio_fsel()
-    int _GPIO_FSEL_INPT = "BCM2835_GPIO_FSEL_INPT "# = 0b000,   ///< Input
-    int _GPIO_FSEL_OUTP = "BCM2835_GPIO_FSEL_OUTP" # = 0b001,   ///< Output
+    int _GPIO_FSEL_INPT "BCM2835_GPIO_FSEL_INPT "# = 0b000,   ///< Input
+    int _GPIO_FSEL_OUTP "BCM2835_GPIO_FSEL_OUTP" # = 0b001,   ///< Output
     # Other definitions
     int HI "HIGH"
     int LO "LOW"
@@ -90,14 +90,19 @@ DEF USEC_PER_SEC = 1000000
 
 ############# Bind pins to names #############
 # MOT_X is an array, with indices enums EN, STEP, DIR
-cdef int EN, STEP, DIR = range(3)
+# cdef int EN, STEP, DIR = range(3)
 
-MOT_A = []
+cdef enum MOT_PINS:
+    EN       = 0
+    STEP     = 1
+    DIR      = 2
+
+MOT_A = range(3)
 MOT_A[EN]       = _RPI_GPIO_P1_07
 MOT_A[STEP]     = _RPI_GPIO_P1_03
 MOT_A[DIR]      = _RPI_GPIO_P1_05
 
-MOT_B = []
+MOT_B = range(3)
 MOT_B[EN]       = _RPI_GPIO_P1_08
 MOT_B[STEP]     = _RPI_GPIO_P1_10
 MOT_B[DIR]      = _RPI_GPIO_P1_11
@@ -106,8 +111,13 @@ LAS             = _RPI_GPIO_P1_12
 
 # Switches
 # End stops
-cdef int XMIN, XMAX, YMIN, YMAX = range(4)
-ENDSTOP = []
+cdef enum ENDSTOP_PINS:
+    XMIN    = 0
+    XMAX    = 1
+    YMIN    = 2
+    YMAX    = 3
+
+ENDSTOP = range(4)
 ENDSTOP[XMIN]   = _RPI_GPIO_P1_13
 ENDSTOP[XMAX]   = _RPI_GPIO_P1_15
 ENDSTOP[YMIN]   = _RPI_GPIO_P1_16
