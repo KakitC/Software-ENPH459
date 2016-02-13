@@ -4,10 +4,16 @@ from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Build import cythonize
 
+extensions = [
+    Extension("hardwareDriver",
+              ["hardwareDriver.pyx"],
+              libraries=["bcm2835"]
+              )
+    ,
+    Extension("HardwareManager",
+              ["HardwareManager.pyx"]
+              )
+]
 setup(
-    ext_modules=cythonize([Extension("hardwareDriver", ["hardwareDriver.pyx"],
-              libraries=["bcm2835"])])
+    ext_modules=cythonize(extensions)
 )
-# setup(
-#     ext_modules=cythonize([Extension("arrayTest", ["arrayTest.pyx"])])
-# )

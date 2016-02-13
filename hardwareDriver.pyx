@@ -1,15 +1,13 @@
-import math
-
+"""
+hardwareDriver.pyx
+A Cython module for all low-level hardware access, including all GPIO
+functions.
+"""
 __author__ = 'Kakit'
-
-import platform
-OS = platform.system()
-if OS == "Windows":
-    print "WARNING: Only written to work for Linux"
 
 import math
 from cpython cimport array
-import array
+# import array
 
 # Define external functions
 cdef extern from "sys/time.h":
@@ -132,9 +130,8 @@ SAFE_FEET       = _RPI_GPIO_P1_19
 
 
 ############### External Interface Functions ##########################
-# Interfaces are def (cpdef?) for Python access
 
-def gpio_init():
+cpdef gpio_init():
     """ Initialize GPIO pins on Raspberry Pi. Make sure to run program
     in "sudo" to allow GPIO to run.
     :return: 0 if success, else 1
@@ -149,78 +146,32 @@ def gpio_init():
         bcm2835_gpio_fsel(MOT_A[outpin], _GPIO_FSEL_OUTP)
         bcm2835_gpio_fsel(MOT_B[outpin], _GPIO_FSEL_OUTP)
 
-    # Enable stepper motors
-    motor_enable()
-
     # Inputs
     for inpin in list_of_endstop_pins:
         bcm2835_gpio_fsel(ENDSTOP[inpin], _GPIO_FSEL_INPT)
     bcm2835_gpio_fsel(SAFE_FEET, _GPIO_FSEL_INPT)
     
-    print "GPIO Initialization successful"
+    #print "GPIO Initialization successful"
+    return 0
 
 
-def motor_enable():
+cpdef motor_enable():
     """ Set stepper motor Enable pins """
     bcm2835_gpio_set(MOT_A[EN])
     bcm2835_gpio_set(MOT_B[EN])
 
 
-def motor_disable():
+cpdef motor_disable():
     """ Clear stepper motor Enable pins """
     bcm2835_gpio_clr(MOT_A[EN])
     bcm2835_gpio_clr(MOT_B[EN])
 
 
-def gpio_close():
+cpdef gpio_close():
     """ Close GPIO connection. Call this when GPIO access is complete.
     :return: void
     """
     bcm2835_close()
-
-
-def laser_cut(cut_spd, travel_spd, x_start, x_end, y_start, y_end, las_mask,
-              step_size):
-    """ Perform a single straight-line motion of the laser head
-    while firing the laser according to the mask image.
-
-    Laser moves at cut_spd when laser is on, travel_spd else. Uses image bitmap
-    from las_mask. Requires gpio_init to be ran first.
-
-    :param cut_spd: Cutting speed in mm/s
-    :type: double
-    :param travel_spd: Travel speed in mm/s
-    :type: double
-    :param x_start: X position start in mm
-    :type: double
-    :param y_start: Y position change in mm
-    :type: double
-    :param las_mask: Laser engraving bitmap image
-    :type: #TODO figure out data format
-    """
-
-    #TODO Implement laser_cut()
-    # Algorithm:
-    # 1. Create pathing step list
-    # 1a. Make pixelized line from (x_start,y_start) to (x_end,y_end)
-    # 1b. Convert line into a list of A,B coordinates (algo)
-    # 2. Create laser spot list from pathing step position vs image
-    # 3. Create timing list from speeds and laser spot list
-    # 4. Initialize and check things, clear interrupts?
-    # 5. Main movement loop, iterate on lists
-    # 5a. Step X,Y, set las
-    # 5b. Poll switches
-    #       if switches: Fail out, throw that exception
-    #       # This can just be polled, min speed might be 1mm/s but still
-    #       # stepping at 75ms period (13Hz)
-    # 5c. Timing idle until next timing delta on list is passed
-    # 6. cleanup, return
-
-    # 1. Create pathing step list
-    # 1a. Make pixelized line from (x_start,y_start) to (x_end,y_end)
-
-    pass
-    #TODO throws exceptions: end stop trigger, safety switch trigger, overtemp
 
 
 cpdef int read_switches():
@@ -239,27 +190,30 @@ cpdef int read_switches():
 
     return retval
 
-################## INTERNAL HELPER FUNCTIONS ################
 
-def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
+cdef move_laser(step_list, las_list, time_list):
+    """ Perform the laser head step motion loop with precise timings.
+
+    :param step_list: List of [a,b] steps to take each increment. 0 or +/-1.
+    :type: list[n][2] <integer>
+    :param las_list: List of laser on/off value. 0 or 1.
+    :type: list[n] <integer>
+    :param time_list: List of times (us) to spend at each position
+    :type: list[n] <integer>
+
+    :return: Returns associated switch values if endstops or safety feet
+    are triggered, else returns 0. See read_switches() for details.
+    :rtype: int
+    """
+
+    step_listA = step_list[:][0]
+    step_listB = step_list[:][1]
+
     cdef int[:] step_arrA = array.array('i', step_listA)
     cdef int[:] step_arrB = array.array('i', step_listB)
     cdef int[:] las_arr = array.array('i', las_list)
     cdef int[:] time_arr = array.array('i', time_list)
-
     cdef int list_len = len(las_list)
-
-#cdef int move_laser(int step_listA[], int step_listB[], int las_list[], int time_list[]):
-    """ Perform the laser head step motion loop with precise timings.
-
-    :param step_list: List of [a,b] steps to take each increment. 0 or +/-1.
-    :param las_list: List of laser on/off values, same length as step_list. 0/1.
-    :param time_list: List of times to spend at each position in us
-
-    :return: Returns associated switch values if endstops or safety feet
-    are triggered, else returns 0.
-    :rtype: int
-    """
 
     cdef timeval then, now
     cdef int delta = 0
@@ -338,6 +292,7 @@ def move_laser_wrapper(step_listA, step_listB, las_list, time_list):
 
     return retval
 
+################## INTERNAL HELPER FUNCTIONS ################
 
 cdef inline int time_diff(timeval start, timeval end):
     """ Calculate time in microseconds between 2 timeval structs."""
