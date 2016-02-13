@@ -24,7 +24,7 @@ $RECYCLE.BIN/
 *.o
 *.pyd
 *.so
-*\build\*
+*build\*
 *.pyc
 *.c
 

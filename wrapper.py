@@ -11,6 +11,7 @@ OS = platform.system()
 #     os.system("sh build.sh")
 #     os.nice(-20)
 os.nice(-20)
+from time import time
 
 # import hardwareDriver as hd
 # testlen = 1000
@@ -25,6 +26,12 @@ os.nice(-20)
 #     hd.move_laser_wrapper(step_listA, step_listB, las_list, time_list)
 
 HWMan = HardwareManager()
-print HWMan.laser_cut(1,1,1,1)
-HWMan.home_xy()
-HWMan.laser_cut(1,1,1,1)
+print "cut", HWMan.laser_cut(1,1,1,1)
+print "home", HWMan.home_xy()
+print "cut", HWMan.laser_cut(1,1,1,1)
+
+HWMan.set_step_cal(113.7)
+tstart = time()
+HWMan.laser_cut(1,1,100,100)
+tend = time()
+print tend - tstart

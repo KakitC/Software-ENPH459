@@ -10,7 +10,7 @@ class HardwareManager:
     otherwise implements the control and sensor interface functions.
     """
 
-    cpdef __init__(self):
+    def __init__(self):
         """ Instantiate and initialize default settings for HardwareManager.
         """
         self.x, self.y = 0, 0
@@ -22,9 +22,31 @@ class HardwareManager:
         if hd.gpio_init() != 0:
             raise IOError("GPIO not initialized correctly")
 
-############### HW INTERFACE FUNCTIONS ########################
+################### SETTINGS INTERFACE FUNCTIONS #####################
 
-    cpdef home_xy(self):
+    def set_las_mask(self, filepath, scale):
+        """ Set laser bit mask to an image on disk, stretched to scale
+
+        :param filepath: Linux image full filepath and name
+        :type: string
+        :param scale: PPI of the image
+        :type: int
+        :return: void
+        """
+        pass
+
+    def set_step_cal(self, step_cal):
+        """ Changes the steps/mm setting of the stepper motors
+        :param step_cal: steps per mm
+        :type: double
+        :return: void
+        """
+        self.step_cal = step_cal
+
+
+#################### HW INTERFACE FUNCTIONS ########################
+
+    def home_xy(self):
         """ Initialize laser position by moving to endstop min position (0,0).
         """
         hd.motor_enable()
@@ -37,19 +59,7 @@ class HardwareManager:
         return 0
 
 
-    cpdef set_las_mask(self, filepath, scale):
-        """ Set laser bit mask to an image on disk, stretched to scale
-
-        :param filepath: Linux image full filepath and name
-        :type: string
-        :param scale: PPI of the image
-        :type: int
-        :return: void
-        """
-        pass
-
-
-    cpdef laser_cut(self, double cut_spd, double travel_spd,
+    def laser_cut(self, double cut_spd, double travel_spd,
                     double x_delta, double y_delta):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
@@ -100,7 +110,7 @@ class HardwareManager:
         #TODO exceptions: end stop trigger, safety switch trigger
 
 ############################# INTERNAL FUNCTIONS ############################
-    cdef _gen_step_list(self, int a_delta, int b_delta):
+    def _gen_step_list(self, int a_delta, int b_delta):
         """ Create a list of A/B steps from X/Y coordinates and step size.
 
         Uses Bresenhem line rasterization algorithm.

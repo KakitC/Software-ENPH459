@@ -31,3 +31,5 @@ import cythonSandbox as cs
 # print t_end - t_start, "seconds"
 
 test2 = cs.TestClass()
+test2.test_foo(1,2)
+test2.test_foo(1.,2.)
