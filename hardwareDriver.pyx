@@ -206,6 +206,9 @@ cdef move_laser(step_list, las_list, time_list):
     :rtype: int
     """
 
+    # TODO Remove diagnostics
+    # TODO Write an 8-bit laser power, variable step time version of this
+
     step_listA = step_list[:][0]
     step_listB = step_list[:][1]
 
@@ -223,8 +226,6 @@ cdef move_laser(step_list, las_list, time_list):
     gettimeofday(&now, NULL)
 
     # Diagnostics
-    # cdef int deltaTimes[len(las_list)]
-    # cdef int opTimes[len(las_list)]
     cdef int[:] deltaTimes = array.array('i', range(list_len))
     cdef int[:] opTimes = array.array('i', range(list_len))
 

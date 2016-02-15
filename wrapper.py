@@ -3,6 +3,7 @@ __author__ = 'kakit'
 import platform
 import os
 from HardwareManager import HardwareManager
+from time import time
 
 OS = platform.system()
 # if OS == "Windows":
@@ -11,7 +12,6 @@ OS = platform.system()
 #     os.system("sh build.sh")
 #     os.nice(-20)
 os.nice(-20)
-from time import time
 
 # import hardwareDriver as hd
 # testlen = 1000
@@ -26,12 +26,13 @@ from time import time
 #     hd.move_laser_wrapper(step_listA, step_listB, las_list, time_list)
 
 HWMan = HardwareManager()
-print "cut", HWMan.laser_cut(1,1,1,1)
+print "cut", HWMan.laser_cut(1,10,1,1)
 print "home", HWMan.home_xy()
-print "cut", HWMan.laser_cut(1,1,1,1)
+print "cut", HWMan.laser_cut(1,10,1,1)
 
-HWMan.set_step_cal(113.7)
+HWMan.set_step_cal(13.7)
+HWMan.set_las_mask([[0]], .0001)
 tstart = time()
-HWMan.laser_cut(1,1,100,100)
+HWMan.laser_cut(1,10,1,1)
 tend = time()
 print tend - tstart

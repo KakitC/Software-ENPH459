@@ -13,12 +13,14 @@ class HardwareManager:
     def __init__(self):
         """ Instantiate and initialize default settings for HardwareManager.
         """
-        self.x, self.y = 0, 0
+        self.x, self.y = 0.0, 0.0
         self.step_cal = 12.7
         self.cut_spd = 10
         self.travel_spd = 100
         self.homed = False
         self.motors_enabled = False
+        self.las_mask = [[255]] # White - PIL Image 0-255 vals
+        self.las_dpi = 0.0001 # ~0 DPI, 1 pixel for whole space
         if hd.gpio_init() != 0:
             raise IOError("GPIO not initialized correctly")
 
@@ -29,11 +31,13 @@ class HardwareManager:
 
         :param filepath: Linux image full filepath and name
         :type: string
-        :param scale: PPI of the image
-        :type: int
+        :param scale: DPI of the image
+        :type: double
         :return: void
         """
-        pass
+        self.las_mask = filepath # TODO REMOVE HACK
+        self.las_dpi = scale
+
 
     def set_step_cal(self, step_cal):
         """ Changes the steps/mm setting of the stepper motors
@@ -102,9 +106,18 @@ class HardwareManager:
         # Convert to A,B pixels delta
         cdef int a_delta = int(round((x_delta + y_delta) * self.step_cal))
         cdef int b_delta = int(round((x_delta - y_delta) * self.step_cal))
-        # TODO track error in x and y delta
 
         step_list = self._gen_step_list(a_delta, b_delta)
+        las_list = self._gen_las_list(step_list, setting="default")
+        time_list = self._gen_time_list(step_list, las_list)
+
+        if hd.move_laser(step_list, las_list, time_list):
+            return -2
+
+        # update position tracking
+        # TODO track error in x and y delta
+        self.x += 0.5*(a_delta + b_delta) * self.step_cal
+        self.y += 0.5*(a_delta - b_delta) * self.step_cal
 
         return 0
         #TODO exceptions: end stop trigger, safety switch trigger
@@ -164,3 +177,53 @@ class HardwareManager:
             step_list = [[_[0], -_[1]] for _ in step_list]
 
         return step_list
+
+    def _gen_las_list(self, step_list, setting="default"):
+        """ Create a list of 1-bit laser power (on/off) for cutting path.
+
+        Has options for generating stock las_list's quickly. Currently supports:
+        "blank" - All white, no cut
+        "dark" - All black, cut everything
+
+        :param step_list: List of A/B steps to take for cut operation
+        :type: list[n][2] of int(+/-1 or 0)
+        :param setting: las_list generation settings.
+        :return: laser cutting bit list
+        :rtype: list[n] of [0 or 1]
+        """
+
+        if setting == "blank":
+            return [0 for i in range(len(step_list))]
+        if setting == "dark":
+            return [1 for i in range(len(step_list))]
+
+        cdef double x_now = self.x
+        cdef double y_now = self.y
+
+        las_list = []
+
+        for i in step_list:
+            x_now += 0.5*(i[0] + i[1]) * self.step_cal
+            y_now += 0.5*(i[0] - i[1]) * self.step_cal
+
+            # Sets laser power to 1 if mask is 0 (dark = cut)
+            las_list.append(0 if self.las_mask[int(x_now * self.las_dpi),
+                                               int(y_now * self.las_dpi)]
+                            else 1)
+
+        return las_list
+
+
+    def _gen_time_list(self, las_list):
+        """ Create a list of times to stay at each step for laser cutting
+        or moving.
+
+        :param las_list: laser cutting bit list
+        :type: list[n] of 0 or 1
+        :return: List of times
+        :rtype: list[n] <integer>
+        """
+
+        return [hd.USEC_PER_SEC / (self.cut_spd * self.step_cal) if i
+                else hd.USEC_PER_SEC / (self.travel_spd * self.step_cal)
+                for i in las_list]
