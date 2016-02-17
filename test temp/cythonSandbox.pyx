@@ -1,4 +1,4 @@
-# from cpython cimport array
+from cpython cimport array
 # import array
 #
 # cdef array.array a = array.array('i', [i for i in range(5)])
@@ -7,8 +7,15 @@
 #     print a.data.as_ints[i]
 #     print b.data.as_ints[i]
 
-class TestClass:
+cdef int[:] list = array.array('i', range(5))
+print len(list)
+cdef int TEST[5]
+#cdef int BUTTS[len(list)]
+for i in list:
+    TEST[i] = i*3
+#    BUTTS[i] = i*2
 
-    def test_foo(self, int i, double f):
-        print i
-        print f
+cdef testfun():
+    i = 5
+    i += 1
+    print i

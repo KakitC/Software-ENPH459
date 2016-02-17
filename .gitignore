@@ -52,3 +52,7 @@ $RECYCLE.BIN/
 Network Trash Folder
 Temporary Items
 .apdisk
+test temp/build/temp.win32-2.7/Release/cythonSandbox.pyd.manifest
+test temp/build/temp.win32-2.7/Release/cythonSandbox.exp
+test temp/build/temp.win32-2.7/Release/cythonSandbox.lib
+test temp/build/temp.win32-2.7/Release/cythonSandbox.obj

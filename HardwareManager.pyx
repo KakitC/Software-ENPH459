@@ -1,6 +1,11 @@
 __author__ = 'kakit'
 
-import hardwareDriver as hd
+#import hardwareDriver as hd
+cimport hardwareDriver as hd
+
+# Define vars
+BED_XMAX = 200
+BED_YMAX = 250
 
 class HardwareManager:
     """ An object to track all laser cutter hardware state information and
@@ -57,6 +62,7 @@ class HardwareManager:
         self.motors_enabled = True
 
         # TODO put in homing routine
+        stop = self.laser_cut(100, 100, -BED_XMAX, 0, "blank")
         self.x, self.y = 0, 0
         self.homed = True
 
@@ -64,7 +70,7 @@ class HardwareManager:
 
 
     def laser_cut(self, double cut_spd, double travel_spd,
-                    double x_delta, double y_delta):
+                  double x_delta, double y_delta, las_setting="default"):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
 
@@ -79,6 +85,8 @@ class HardwareManager:
         :type: double
         :param y_delta: Y position change in mm
         :type: double
+        :param las_setting: _gen_las_list quick options
+        :type: string
         """
 
         # TODO Implement laser_cut()
@@ -103,16 +111,18 @@ class HardwareManager:
         if not self.homed or not self.motors_enabled:
             return -1
 
+        # TODO Check command against soft XY limits
         # Convert to A,B pixels delta
         cdef int a_delta = int(round((x_delta + y_delta) * self.step_cal))
         cdef int b_delta = int(round((x_delta - y_delta) * self.step_cal))
 
         step_list = self._gen_step_list(a_delta, b_delta)
-        las_list = self._gen_las_list(step_list, setting="default")
-        time_list = self._gen_time_list(step_list, las_list)
+        las_list = self._gen_las_list(step_list, setting=las_setting)
+        time_list = self._gen_time_list(las_list)
 
-        if hd.move_laser(step_list, las_list, time_list):
-            return -2
+        retval = hd.move_laser(step_list, las_list, time_list)
+        if retval != 0:
+            return retval
 
         # update position tracking
         # TODO track error in x and y delta
@@ -199,6 +209,9 @@ class HardwareManager:
 
         cdef double x_now = self.x
         cdef double y_now = self.y
+        cdef int mask_xsize = len(self.las_mask)
+        cdef int mask_ysize = len(self.las_mask[0])
+        cdef int x_px, y_px
 
         las_list = []
 
@@ -207,9 +220,11 @@ class HardwareManager:
             y_now += 0.5*(i[0] - i[1]) * self.step_cal
 
             # Sets laser power to 1 if mask is 0 (dark = cut)
-            las_list.append(0 if self.las_mask[int(x_now * self.las_dpi),
-                                               int(y_now * self.las_dpi)]
-                            else 1)
+            # TODO account for out-of-bounds errors
+            x_px = int(x_now * self.las_dpi)
+            y_px = int(y_now * self.las_dpi)
+
+            las_list.append(0 if self.las_mask[x_px][y_px] else 1)
 
         return las_list
 
@@ -224,6 +239,6 @@ class HardwareManager:
         :rtype: list[n] <integer>
         """
 
-        return [hd.USEC_PER_SEC / (self.cut_spd * self.step_cal) if i
-                else hd.USEC_PER_SEC / (self.travel_spd * self.step_cal)
+        return [int(hd.USEC_PER_SEC / (self.cut_spd * self.step_cal)) if i
+                else int(hd.USEC_PER_SEC / (self.travel_spd * self.step_cal))
                 for i in las_list]

@@ -7,7 +7,6 @@ __author__ = 'Kakit'
 
 import math
 from cpython cimport array
-# import array
 
 # Define external functions
 cdef extern from "sys/time.h":
@@ -56,24 +55,26 @@ cdef extern from "bcm2835.h":
 
     # Not included: SPI functions
 
-    # bcm2835 pinout
-    int _RPI_GPIO_P1_03 "RPI_GPIO_P1_03"        # =  0, #
-    int _RPI_GPIO_P1_05 "RPI_GPIO_P1_05"        # =  1, #
-    int _RPI_GPIO_P1_07 "RPI_GPIO_P1_07"        # =  4, #
-    int _RPI_GPIO_P1_08 "RPI_GPIO_P1_08"        # = 14, # defaults alt UART0_TXD
-    int _RPI_GPIO_P1_10 "RPI_GPIO_P1_10"        # = 15, # defaults alt UART0_RXD
-    int _RPI_GPIO_P1_11 "RPI_GPIO_P1_11"        # = 17, #
-    int _RPI_GPIO_P1_12 "RPI_GPIO_P1_12"        # = 18, #
-    int _RPI_GPIO_P1_13 "RPI_GPIO_P1_13"        # = 21, #
-    int _RPI_GPIO_P1_15 "RPI_GPIO_P1_15"        # = 22, #
-    int _RPI_GPIO_P1_16 "RPI_GPIO_P1_16"        # = 23, #
-    int _RPI_GPIO_P1_18 "RPI_GPIO_P1_18"        # = 24, #
-    int _RPI_GPIO_P1_19 "RPI_GPIO_P1_19"        # = 10, # MOSI when SPI0 in use
-    int _RPI_GPIO_P1_21 "RPI_GPIO_P1_21"        # =  9, # MISO when SPI0 in use
-    int _RPI_GPIO_P1_22 "RPI_GPIO_P1_22"        # = 25, #
-    int _RPI_GPIO_P1_23 "RPI_GPIO_P1_23"        # = 11, # CLK when SPI0 in use
-    int _RPI_GPIO_P1_24 "RPI_GPIO_P1_24"        # =  8, # CE0 when SPI0 in use
-    int _RPI_GPIO_P1_26 "RPI_GPIO_P1_26"        # =  7, # CE1 when SPI0 in use
+    # bcm2835 pinout for Raspberry Pi B+
+    # bcm2835 library doesn't support physical pins 27-40
+    # (GPIO 5, 6, 12, 13, 19, 26, 20, 21)
+    int _RPI_V2_GPIO_P1_03 "RPI_V2_GPIO_P1_03"  # =  2  #Version 2, Pin P1-03
+    int _RPI_V2_GPIO_P1_05 "RPI_V2_GPIO_P1_05"  # =  3  #Version 2, Pin P1-05
+    int _RPI_V2_GPIO_P1_07 "RPI_V2_GPIO_P1_07"  # =  4  #Version 2, Pin P1-07
+    int _RPI_V2_GPIO_P1_08 "RPI_V2_GPIO_P1_08"  # = 14  #Version 2, Pin P1-08, defaults to alt function 0 UART0_TXD
+    int _RPI_V2_GPIO_P1_10 "RPI_V2_GPIO_P1_10"  # = 15  #Version 2, Pin P1-10, defaults to alt function 0 UART0_RXD
+    int _RPI_V2_GPIO_P1_11 "RPI_V2_GPIO_P1_11"  # = 17  #Version 2, Pin P1-11
+    int _RPI_V2_GPIO_P1_12 "RPI_V2_GPIO_P1_12"  # = 18  #Version 2, Pin P1-12
+    int _RPI_V2_GPIO_P1_13 "RPI_V2_GPIO_P1_13"  # = 27  #Version 2, Pin P1-13
+    int _RPI_V2_GPIO_P1_15 "RPI_V2_GPIO_P1_15"  # = 22  #Version 2, Pin P1-15
+    int _RPI_V2_GPIO_P1_16 "RPI_V2_GPIO_P1_16"  # = 23  #Version 2, Pin P1-16
+    int _RPI_V2_GPIO_P1_18 "RPI_V2_GPIO_P1_18"  # = 24  #Version 2, Pin P1-18
+    int _RPI_V2_GPIO_P1_19 "RPI_V2_GPIO_P1_19"  # = 10  #Version 2, Pin P1-19, MOSI when SPI0 in use
+    int _RPI_V2_GPIO_P1_21 "RPI_V2_GPIO_P1_21"  # =  9  #Version 2, Pin P1-21, MISO when SPI0 in use
+    int _RPI_V2_GPIO_P1_22 "RPI_V2_GPIO_P1_22"  # = 25  #Version 2, Pin P1-22
+    int _RPI_V2_GPIO_P1_23 "RPI_V2_GPIO_P1_23"  # = 11  #Version 2, Pin P1-23, CLK when SPI0 in use
+    int _RPI_V2_GPIO_P1_24 "RPI_V2_GPIO_P1_24"  # =  8  #Version 2, Pin P1-24, CE0 when SPI0 in use
+    int _RPI_V2_GPIO_P1_26 "RPI_V2_GPIO_P1_26"  # =  7  #Version 2, Pin P1-26, CE1 when SPI0 in use
 
     # Port function select modes for bcm2835_gpio_fsel()
     int _GPIO_FSEL_INPT "BCM2835_GPIO_FSEL_INPT "# = 0b000,   ///< Input
@@ -83,55 +84,50 @@ cdef extern from "bcm2835.h":
     int LO "LOW"
 
 # Define vars
-DEF USEC_PER_SEC = 1000000
+cdef int USEC_PER_SEC = 1000000
 
 
 ############# Bind pins to names #############
-# MOT_X is an array, with indices enums EN, STEP, DIR
-# cdef int EN, STEP, DIR = range(3)
 
-# cdef enum MOT_PINS:
-#     EN       = 0
-#     STEP     = 1
-#     DIR      = 2
-cdef int EN = 0, STEP = 1, DIR = 2
-list_of_mot_pins = (EN, STEP, DIR)
+# Motor outputs
+# MOT_N is an array, with indices enums EN, STEP, DIR
+cdef int EN     = 0
+cdef int STEP   = 1
+cdef int DIR    = 2
+cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
 
 cdef int MOT_A[3]
-MOT_A[EN]       = _RPI_GPIO_P1_07
-MOT_A[STEP]     = _RPI_GPIO_P1_03
-MOT_A[DIR]      = _RPI_GPIO_P1_05
+MOT_A[EN]       = _RPI_V2_GPIO_P1_03
+MOT_A[STEP]     = _RPI_V2_GPIO_P1_05
+MOT_A[DIR]      = _RPI_V2_GPIO_P1_07
 
 cdef int MOT_B[3]
-MOT_B[EN]       = _RPI_GPIO_P1_08
-MOT_B[STEP]     = _RPI_GPIO_P1_10
-MOT_B[DIR]      = _RPI_GPIO_P1_11
+MOT_B[EN]       = _RPI_V2_GPIO_P1_08
+MOT_B[STEP]     = _RPI_V2_GPIO_P1_10
+MOT_B[DIR]      = _RPI_V2_GPIO_P1_11
 
-LAS             = _RPI_GPIO_P1_12
+# Laser output
+LAS             = _RPI_V2_GPIO_P1_12
 
-# Switches
-# End stops
-# cdef enum ENDSTOP_PINS:
-#     XMIN    = 0
-#     XMAX    = 1
-#     YMIN    = 2
-#     YMAX    = 3
-cdef int XMIN = 0, XMAX = 1, YMIN = 2, YMAX = 3
-list_of_endstop_pins = (XMIN, XMAX, YMIN, YMAX)
+# All input switches
+cdef int XMIN       = 0
+cdef int XMAX       = 1
+cdef int YMIN       = 2
+cdef int YMAX       = 3
+cdef int SAFE_FEET  = 4
+cdef int[:] list_of_sw_pins = array.array('i', (XMIN, XMAX, YMIN, YMAX,
+                                                SAFE_FEET))
 
-cdef int ENDSTOP[4]
-ENDSTOP[XMIN]   = _RPI_GPIO_P1_13
-ENDSTOP[XMAX]   = _RPI_GPIO_P1_15
-ENDSTOP[YMIN]   = _RPI_GPIO_P1_16
-ENDSTOP[YMAX]   = _RPI_GPIO_P1_18
-
-# Safety feet E-stop
-SAFE_FEET       = _RPI_GPIO_P1_19
-
+cdef int SWS[5]
+SWS[XMIN]   = _RPI_V2_GPIO_P1_13
+SWS[XMAX]   = _RPI_V2_GPIO_P1_15
+SWS[YMIN]   = _RPI_V2_GPIO_P1_16
+SWS[YMAX]   = _RPI_V2_GPIO_P1_18
+SWS[SAFE_FEET] = _RPI_V2_GPIO_P1_19
 
 ############### External Interface Functions ##########################
 
-cpdef gpio_init():
+cdef int gpio_init():
     """ Initialize GPIO pins on Raspberry Pi. Make sure to run program
     in "sudo" to allow GPIO to run.
     :return: 0 if success, else 1
@@ -147,34 +143,57 @@ cpdef gpio_init():
         bcm2835_gpio_fsel(MOT_B[outpin], _GPIO_FSEL_OUTP)
 
     # Inputs
-    for inpin in list_of_endstop_pins:
-        bcm2835_gpio_fsel(ENDSTOP[inpin], _GPIO_FSEL_INPT)
-    bcm2835_gpio_fsel(SAFE_FEET, _GPIO_FSEL_INPT)
+    for inpin in list_of_sw_pins:
+        bcm2835_gpio_fsel(SWS[inpin], _GPIO_FSEL_INPT)
     
     #print "GPIO Initialization successful"
     return 0
 
 
-cpdef motor_enable():
-    """ Set stepper motor Enable pins """
-    bcm2835_gpio_set(MOT_A[EN])
-    bcm2835_gpio_set(MOT_B[EN])
-
-
-cpdef motor_disable():
-    """ Clear stepper motor Enable pins """
-    bcm2835_gpio_clr(MOT_A[EN])
-    bcm2835_gpio_clr(MOT_B[EN])
-
-
-cpdef gpio_close():
+cdef void gpio_close():
     """ Close GPIO connection. Call this when GPIO access is complete.
     :return: void
     """
     bcm2835_close()
 
+cpdef void gpio_test():
+    """ Toggles all mot pins at max speed for 5s
+    :return: void
+    """
+    gpio_init()
 
-cpdef int read_switches():
+    cdef timeval now, then
+    gettimeofday(&then, NULL)
+    gettimeofday(&now, NULL)
+    while time_diff(then, now) < 5*USEC_PER_SEC:
+        for pin in list_of_mot_pins:
+            bcm2835_gpio_set(MOT_A[pin])
+            bcm2835_gpio_set(MOT_B[pin])
+        bcm2835_gpio_set(LAS)
+
+        for pin in list_of_mot_pins:
+            bcm2835_gpio_clr(MOT_A[pin])
+            bcm2835_gpio_clr(MOT_B[pin])
+        bcm2835_gpio_clr(LAS)
+
+
+cdef void motor_enable():
+    """ Set stepper motor Enable pins
+    :return: void
+    """
+    bcm2835_gpio_set(MOT_A[EN])
+    bcm2835_gpio_set(MOT_B[EN])
+
+
+cdef void motor_disable():
+    """ Clear stepper motor Enable pins
+    :return: void
+    """
+    bcm2835_gpio_clr(MOT_A[EN])
+    bcm2835_gpio_clr(MOT_B[EN])
+
+
+cdef int read_switches():
     """ Read values of XY endstop switches and safety feet.
 
     :return: Bitwise 5-bit value for XMIN, XMAX, YMIN, YMAX, SAFE_FEET (LSB)
@@ -183,15 +202,13 @@ cpdef int read_switches():
     """
     cdef int retval = 0
 
-    for pin in list_of_endstop_pins:
-        retval |= bcm2835_gpio_lev(ENDSTOP[pin]) << pin
-
-    retval |= bcm2835_gpio_lev(SAFE_FEET) << len(list_of_endstop_pins)
+    for pin in list_of_sw_pins:
+        retval |= bcm2835_gpio_lev(SWS[pin]) << pin
 
     return retval
 
 
-cdef move_laser(step_list, las_list, time_list):
+cdef int move_laser(step_list, las_list, time_list):
     """ Perform the laser head step motion loop with precise timings.
 
     :param step_list: List of [a,b] steps to take each increment. 0 or +/-1.
@@ -209,14 +226,16 @@ cdef move_laser(step_list, las_list, time_list):
     # TODO Remove diagnostics
     # TODO Write an 8-bit laser power, variable step time version of this
 
-    step_listA = step_list[:][0]
-    step_listB = step_list[:][1]
+    # Convert to C arrays
+    cdef int list_len = len(las_list)
+    step_listA = zip(*step_list)[0]
+    step_listB = zip(*step_list)[1]
+    print list_len
 
     cdef int[:] step_arrA = array.array('i', step_listA)
     cdef int[:] step_arrB = array.array('i', step_listB)
     cdef int[:] las_arr = array.array('i', las_list)
     cdef int[:] time_arr = array.array('i', time_list)
-    cdef int list_len = len(las_list)
 
     cdef timeval then, now
     cdef int delta = 0
@@ -241,16 +260,17 @@ cdef move_laser(step_list, las_list, time_list):
         bcm2835_gpio_write(LAS, las_arr[i])
 
         # Move steppers
-        # MOT A DIR positive is X, MOT B DIR positive is Y
+        # MOT A DIR positive is _, MOT B DIR positive is _
+        bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
+        bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
+
+        # TODO Verify that setting and clearing STEP pins immediately works correctly
         if step_arrA[i] != 0:
             bcm2835_gpio_set(MOT_A[STEP])
-            bcm2835_gpio_clr(MOT_A[STEP])
-        bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
-
         if step_arrB[i] != 0:
             bcm2835_gpio_set(MOT_B[STEP])
-            bcm2835_gpio_clr(MOT_B[STEP])
-        bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
+        bcm2835_gpio_clr(MOT_A[STEP])
+        bcm2835_gpio_clr(MOT_B[STEP])
 
         #Check switches, quit if triggered
         retval = read_switches()
