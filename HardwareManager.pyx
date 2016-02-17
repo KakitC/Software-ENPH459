@@ -20,8 +20,6 @@ class HardwareManager:
         """
         self.x, self.y = 0.0, 0.0
         self.step_cal = 12.7
-        self.cut_spd = 10
-        self.travel_spd = 100
         self.homed = False
         self.motors_enabled = False
         self.las_mask = [[255]] # White - PIL Image 0-255 vals
@@ -89,7 +87,6 @@ class HardwareManager:
         :type: string
         """
 
-        # TODO Implement laser_cut()
         # Algorithm:
         # 1. Create pathing step list
         # 1a. Make pixelized line from (x_start,y_start) to (x_end,y_end)
@@ -112,13 +109,14 @@ class HardwareManager:
             return -1
 
         # TODO Check command against soft XY limits
+        # TODO Check speed against max toggle rate (~<1kHz) and limit
         # Convert to A,B pixels delta
         cdef int a_delta = int(round((x_delta + y_delta) * self.step_cal))
         cdef int b_delta = int(round((x_delta - y_delta) * self.step_cal))
 
         step_list = self._gen_step_list(a_delta, b_delta)
         las_list = self._gen_las_list(step_list, setting=las_setting)
-        time_list = self._gen_time_list(las_list)
+        time_list = self._gen_time_list(cut_spd, travel_spd, las_list)
 
         retval = hd.move_laser(step_list, las_list, time_list)
         if retval != 0:
@@ -130,7 +128,7 @@ class HardwareManager:
         self.y += 0.5*(a_delta - b_delta) * self.step_cal
 
         return 0
-        #TODO exceptions: end stop trigger, safety switch trigger
+        #TODO raise exceptions: end stop trigger, safety switch trigger
 
 ############################# INTERNAL FUNCTIONS ############################
     def _gen_step_list(self, int a_delta, int b_delta):
@@ -164,7 +162,7 @@ class HardwareManager:
             ab_flip_flag = True
 
         # Generate step list for line in first octant. Bresenham's algo here
-        # TODO Optimize step_list gen by using C arrays?
+        # TODO Optimize step_list gen by using C arrays
         step_list = []
         cdef int a_now = 0
         cdef int error = 2*b_delta - a_delta
@@ -229,7 +227,7 @@ class HardwareManager:
         return las_list
 
 
-    def _gen_time_list(self, las_list):
+    def _gen_time_list(self, cut_spd, travel_spd, las_list):
         """ Create a list of times to stay at each step for laser cutting
         or moving.
 
@@ -239,6 +237,8 @@ class HardwareManager:
         :rtype: list[n] <integer>
         """
 
-        return [int(hd.USEC_PER_SEC / (self.cut_spd * self.step_cal)) if i
-                else int(hd.USEC_PER_SEC / (self.travel_spd * self.step_cal))
+        # TODO do 8 bit timings
+        # TODO account for diagonal travel being faster than orthogonal
+        return [int(hd.USEC_PER_SEC / (cut_spd * self.step_cal)) if i
+                else int(hd.USEC_PER_SEC / (travel_spd * self.step_cal))
                 for i in las_list]

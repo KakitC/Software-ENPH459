@@ -223,14 +223,10 @@ cdef int move_laser(step_list, las_list, time_list):
     :rtype: int
     """
 
-    # TODO Remove diagnostics
-    # TODO Write an 8-bit laser power, variable step time version of this
-
     # Convert to C arrays
     cdef int list_len = len(las_list)
     step_listA = zip(*step_list)[0]
     step_listB = zip(*step_list)[1]
-    print list_len
 
     cdef int[:] step_arrA = array.array('i', step_listA)
     cdef int[:] step_arrB = array.array('i', step_listB)
@@ -244,13 +240,14 @@ cdef int move_laser(step_list, las_list, time_list):
     gettimeofday(&then, NULL)
     gettimeofday(&now, NULL)
 
-    # Diagnostics
-    cdef int[:] deltaTimes = array.array('i', range(list_len))
-    cdef int[:] opTimes = array.array('i', range(list_len))
+    # # Diagnostics
+    # cdef int[:] deltaTimes = array.array('i', range(list_len))
+    # cdef int[:] opTimes = array.array('i', range(list_len))
 
     cdef int i = 0
     while i < list_len:
-        deltaTimes[i] = delta #Diagnostic
+        # # Diagnostic
+        # deltaTimes[i] = delta
 
         # Reset times
         then.tv_sec, then.tv_usec = now.tv_sec, now.tv_usec
@@ -269,19 +266,20 @@ cdef int move_laser(step_list, las_list, time_list):
             bcm2835_gpio_set(MOT_A[STEP])
         if step_arrB[i] != 0:
             bcm2835_gpio_set(MOT_B[STEP])
+        retval = read_switches()  # Read switches in the middle of a step to
+                                  # prolong the width of a step pulse
         bcm2835_gpio_clr(MOT_A[STEP])
         bcm2835_gpio_clr(MOT_B[STEP])
 
         #Check switches, quit if triggered
-        retval = read_switches()
         if retval:
             print "Switches triggered: " + bin(retval)
             break
 
-        #Diagnostic
-        gettimeofday(&now, NULL)
-        delta = time_diff(then, now)
-        opTimes[i] = delta
+        # # Diagnostic
+        # gettimeofday(&now, NULL)
+        # delta = time_diff(then, now)
+        # opTimes[i] = delta
 
         # Time idle
         while delta < time_arr[i]:
@@ -292,24 +290,24 @@ cdef int move_laser(step_list, las_list, time_list):
 
     bcm2835_gpio_clr(LAS)
 
-    #Diagnostic
-    errs = [deltaTimes[i+1] - time_list[i] for i in range(list_len-1)]
-    meanErr = sum(errs) / float(len(errs))
-    maxErr = max(errs)
-    minErr = min(errs)
-    std_dev = math.sqrt(sum([(x - meanErr)*(x - meanErr) for x
-                             in errs]) / float(len(errs)))
-
-    mean_opTime = sum(opTimes) / list_len
-    std_dev_opTime = math.sqrt(sum([(x - mean_opTime)**2 for x in opTimes])
-                        / float(list_len))
-    max_opTime = max(opTimes)
-    min_opTime = min(opTimes)
-
-    print "meanErr: {}, maxErr: {}, minErr: {}, std_dev: {}".format(
-        meanErr, maxErr, minErr, std_dev)
-    print "mean_opTime: {}, max_opTime: {}, min_opTime: {}, std_dev_opTime: {}"\
-        .format(mean_opTime, max_opTime, min_opTime, std_dev_opTime)
+    # # Diagnostic
+    # errs = [deltaTimes[i+1] - time_list[i] for i in range(list_len-1)]
+    # meanErr = sum(errs) / float(len(errs))
+    # maxErr = max(errs)
+    # minErr = min(errs)
+    # std_dev = math.sqrt(sum([(x - meanErr)*(x - meanErr) for x
+    #                          in errs]) / float(len(errs)))
+    #
+    # mean_opTime = sum(opTimes) / list_len
+    # std_dev_opTime = math.sqrt(sum([(x - mean_opTime)**2 for x in opTimes])
+    #                     / float(list_len))
+    # max_opTime = max(opTimes)
+    # min_opTime = min(opTimes)
+    #
+    # print "meanErr: {}, maxErr: {}, minErr: {}, std_dev: {}".format(
+    #     meanErr, maxErr, minErr, std_dev)
+    # print "mean_opTime: {}, max_opTime: {}, min_opTime: {}, std_dev_opTime: {}"\
+    #     .format(mean_opTime, max_opTime, min_opTime, std_dev_opTime)
 
     return retval
 

@@ -14,9 +14,7 @@ OS = platform.system()
 os.nice(-20)
 
 
-import hardwareDriver as hd
-hd.gpio_test()
-
+#import hardwareDriver as hd
 # testlen = 1000
 # testperiod = 1000
 # step_listA = [1 for _ in range(testlen)]
@@ -28,13 +26,13 @@ hd.gpio_test()
 # for i in range(3):
 #     hd.move_laser_wrapper(step_listA, step_listB, las_list, time_list)
 
-# HWMan = HardwareManager()
-# print "cut", HWMan.laser_cut(1,10,1,1)
-# print "home", HWMan.home_xy()
-# print "cut", HWMan.laser_cut(1,10,1,1)
-#
-# HWMan.set_step_cal(1000)
-# tstart = time()
-# HWMan.laser_cut(1,1,10,10, "dark")
-# tend = time()
-# print tend - tstart
+HWMan = HardwareManager()
+print "cut", HWMan.laser_cut(1,10,1,1)
+print "home", HWMan.home_xy()
+print "cut", HWMan.laser_cut(1,10,1,1)
+
+HWMan.set_step_cal(100)
+tstart = time()
+HWMan.laser_cut(1,1,10,1, "dark")
+tend = time()
+print tend - tstart
