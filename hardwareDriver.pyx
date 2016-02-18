@@ -130,6 +130,7 @@ SWS[SAFE_FEET] = _RPI_V2_GPIO_P1_19
 cdef int gpio_init():
     """ Initialize GPIO pins on Raspberry Pi. Make sure to run program
     in "sudo" to allow GPIO to run.
+
     :return: 0 if success, else 1
     """
 
@@ -152,14 +153,19 @@ cdef int gpio_init():
 
 cdef void gpio_close():
     """ Close GPIO connection. Call this when GPIO access is complete.
+
     :return: void
     """
+
     bcm2835_close()
+
 
 cpdef void gpio_test():
     """ Toggles all mot pins at max speed for 5s
+
     :return: void
     """
+
     gpio_init()
 
     cdef timeval now, then
@@ -179,18 +185,38 @@ cpdef void gpio_test():
 
 cdef void motor_enable():
     """ Set stepper motor Enable pins
+
     :return: void
     """
+
     bcm2835_gpio_set(MOT_A[EN])
     bcm2835_gpio_set(MOT_B[EN])
 
 
 cdef void motor_disable():
     """ Clear stepper motor Enable pins
+
     :return: void
     """
+
     bcm2835_gpio_clr(MOT_A[EN])
     bcm2835_gpio_clr(MOT_B[EN])
+
+
+cdef void las_pulse(double time):
+    """ Turn on the laser output for a given time, then turn off.
+
+    For testing laser functionality. Don't have a function allowing raw access
+    to laser GPIO, meaning accidentally leaving it on indefinitely.
+
+    :param time: Pulse length in seconds
+    :type: int
+    :return: void
+    """
+
+    bcm2835_gpio_set(LAS)
+    time.sleep(time)
+    bcm2835_gpio_clr(LAS)
 
 
 cdef int read_switches():
@@ -261,7 +287,6 @@ cdef int move_laser(step_list, las_list, time_list):
         bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
         bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
 
-        # TODO Verify that setting and clearing STEP pins immediately works correctly
         if step_arrA[i] != 0:
             bcm2835_gpio_set(MOT_A[STEP])
         if step_arrB[i] != 0:

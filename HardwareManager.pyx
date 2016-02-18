@@ -20,6 +20,8 @@ class HardwareManager:
         """
         self.x, self.y = 0.0, 0.0
         self.step_cal = 12.7
+        self.cut_spd = 1
+        self.travel_spd = 50
         self.homed = False
         self.motors_enabled = False
         self.las_mask = [[255]] # White - PIL Image 0-255 vals
@@ -51,11 +53,27 @@ class HardwareManager:
         self.step_cal = step_cal
 
 
+    def set_speed(self, cut_spd, travel_spd):
+        """ Sets the default speed of the laser head for if it is not specified
+        during the moving operation.
+
+        :param cut_spd: Laser speed while cutting in mm/s
+        :type: double
+        :param travel_spd: Moving speed if not cutting in mm/s
+        :type: double
+        :return: void
+        """
+
+        self.cut_spd = cut_spd
+        self.travel_spd = travel_spd
+
+
 #################### HW INTERFACE FUNCTIONS ########################
 
     def home_xy(self):
         """ Initialize laser position by moving to endstop min position (0,0).
         """
+
         hd.motor_enable()
         self.motors_enabled = True
 
@@ -67,21 +85,66 @@ class HardwareManager:
         return 0
 
 
-    def laser_cut(self, double cut_spd, double travel_spd,
-                  double x_delta, double y_delta, las_setting="default"):
+    def las_test(self, time):
+        """ Pulse laser output for testing purposes.
+
+        This is a wrapper for a hardwareDriver function.
+
+        :param time: Pulse time in seconds
+        :type: double
+        :return: void/null
+        """
+
+        hd.las_pulse(time)
+
+
+    def read_switches(self):
+        """ Read values of XY endstop switches and safety feet.
+
+        This is a wrapper for a hardwareDriver function.
+
+        :return: Bitwise 5-bit value for XMIN, XMAX, YMIN, YMAX, SAFE_FEET (LSB)
+                (i.e. 0b01001 => 9: YMAX, XMIN)
+        :rtype: int
+        """
+
+        return hd.read_switches()
+
+    def motor_en_disable(self, bint en):
+        """ Enable or disable stepper motors.
+
+        This is a wrapper for a hardwareDriver function.
+
+        :param en: 1 to enable, 0 to disable
+        :type: bint (bool)
+        :return: void
+        """
+
+        if en:
+            hd.motor_enable()
+        else:
+            hd.motor_disable()
+
+
+    def laser_cut(self, double x_delta, double y_delta,
+                   double cut_spd=None, double travel_spd=None,
+                  las_setting="default"):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
 
-        Laser moves at cut_spd when laser is on, travel_spd else.
-        Uses image bitmap from las_mask. Requires gpio_init to be ran first.
+        Requires gpio_init to be ran first.
+        Laser moves at cut_spd when laser is on, travel_spd else. If speeds are
+        not specified, it will use the default values or the last used speeds.
+        Uses image bitmap from las_mask as the masking bits, or quick options
+        from las_setting.
 
-        :param cut_spd: Cutting speed in mm/s
-        :type: double
-        :param travel_spd: Travel speed in mm/s
-        :type: double
         :param x_delta: X position change in mm
         :type: double
         :param y_delta: Y position change in mm
+        :type: double
+        :param cut_spd: Cutting speed in mm/s (Optional)
+        :type: double
+        :param travel_spd: Travel speed in mm/s (Optional)
         :type: double
         :param las_setting: _gen_las_list quick options
         :type: string
@@ -98,15 +161,18 @@ class HardwareManager:
         # 5a. Step X,Y, set las
         # 5b. Poll switches
         #       if switches: Fail out, throw that exception
-        #       # This can just be polled, min speed might be 1mm/s but still
-        #       # stepping at 75ms period (13Hz)
         # 5c. Timing idle until next timing delta on list is passed
         # 6. cleanup, return
 
-        # 1. Create pathing step list
-        # 1a. Make pixelized line from (x_start,y_start) to (x_end,y_end)
+        # Check if hardware was initialized
         if not self.homed or not self.motors_enabled:
             return -1
+
+        # Store speed values as last used
+        if cut_spd is not None:
+            self.cut_spd = cut_spd
+        if travel_spd is not None:
+            self.travel_spd = travel_spd
 
         # TODO Check command against soft XY limits
         # TODO Check speed against max toggle rate (~<1kHz) and limit
@@ -114,21 +180,23 @@ class HardwareManager:
         cdef int a_delta = int(round((x_delta + y_delta) * self.step_cal))
         cdef int b_delta = int(round((x_delta - y_delta) * self.step_cal))
 
+        # Create step list, lasing list, timing list
         step_list = self._gen_step_list(a_delta, b_delta)
         las_list = self._gen_las_list(step_list, setting=las_setting)
-        time_list = self._gen_time_list(cut_spd, travel_spd, las_list)
+        time_list = self._gen_time_list(self.cut_spd, self.travel_spd, las_list)
 
+        # Move laser head, with precise timings
         retval = hd.move_laser(step_list, las_list, time_list)
         if retval != 0:
             return retval
+        #TODO raise exceptions: end stop trigger, safety switch trigger
 
-        # update position tracking
-        # TODO track error in x and y delta
+        # Update position tracking
+        # TODO track error in x and y delta and do something about it
         self.x += 0.5*(a_delta + b_delta) * self.step_cal
         self.y += 0.5*(a_delta - b_delta) * self.step_cal
 
         return 0
-        #TODO raise exceptions: end stop trigger, safety switch trigger
 
 ############################# INTERNAL FUNCTIONS ############################
     def _gen_step_list(self, int a_delta, int b_delta):
@@ -186,6 +254,7 @@ class HardwareManager:
 
         return step_list
 
+
     def _gen_las_list(self, step_list, setting="default"):
         """ Create a list of 1-bit laser power (on/off) for cutting path.
 
@@ -217,12 +286,12 @@ class HardwareManager:
             x_now += 0.5*(i[0] + i[1]) * self.step_cal
             y_now += 0.5*(i[0] - i[1]) * self.step_cal
 
-            # Sets laser power to 1 if mask is 0 (dark = cut)
+            # Sets laser power to 0 if mask is 255 (blank = don't cut)
             # TODO account for out-of-bounds errors
             x_px = int(x_now * self.las_dpi)
             y_px = int(y_now * self.las_dpi)
 
-            las_list.append(0 if self.las_mask[x_px][y_px] else 1)
+            las_list.append(1 if self.las_mask[x_px][y_px] != 255 else 0)
 
         return las_list
 
