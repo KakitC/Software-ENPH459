@@ -1,4 +1,7 @@
-__author__ = 'kakit'
+"""
+testWrapper.py
+Test script for cythonSandbox
+"""
 
 import platform
 OS = platform.system()

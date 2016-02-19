@@ -1,6 +1,8 @@
 """
-wrapper.py
-Debugging script for testing
+debugImport.py
+This file is for setting up all the imports at the beginning
+of an interactive debug session in the Python console.
+To use, type: execfile("debugImport.py")
 """
 __author__ = 'kakit'
 
@@ -11,6 +13,7 @@ import time
 
 import platform
 import os
+from HardwareManager import HardwareManager
 from time import time
 
 OS = platform.system()
@@ -25,15 +28,3 @@ import HardwareManager as HM
 import hardwareDriver as hd
 
 hman = HM.HardwareManager()
-
-
-
-print "cut", hman.laser_cut(1, 10, 1, 1)
-print "home", hman.home_xy()
-print "cut", hman.laser_cut(1, 10, 1, 1)
-
-hman.set_step_cal(100)
-tstart = time()
-hman.laser_cut(1, 1, 10, 1, "dark")
-tend = time()
-print tend - tstart

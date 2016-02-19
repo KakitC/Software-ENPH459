@@ -1,7 +1,7 @@
 """
 hardwareDriver.pyx
-A Cython module for all low-level hardware access, including all GPIO
-functions.
+A Cython module for all low-level hardware access functions, containing all
+GPIO functions.
 """
 __author__ = 'Kakit'
 
@@ -96,6 +96,7 @@ cdef int STEP   = 1
 cdef int DIR    = 2
 cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
 
+# TODO Check logic active low for EN/switch pins
 cdef int MOT_A[3]
 MOT_A[EN]       = _RPI_V2_GPIO_P1_03
 MOT_A[STEP]     = _RPI_V2_GPIO_P1_05

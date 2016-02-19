@@ -1,3 +1,7 @@
+"""
+setup.py
+Build file for Cython extensions
+"""
 __author__ = 'kakit'
 
 from distutils.core import setup
@@ -12,6 +16,10 @@ extensions = [
     ,
     Extension("HardwareManager",
               ["HardwareManager.pyx"]
+              )
+    ,
+    Extension("gcodeInterface",
+              ["gcodeInterface.pyx"]
               )
 ]
 setup(

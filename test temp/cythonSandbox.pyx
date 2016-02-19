@@ -1,3 +1,8 @@
+"""
+cythonSandbox.pyx
+Test Cython file for checking Cython syntax in Windows without needing to
+build Linux libraries
+"""
 from cpython cimport array
 # import array
 #

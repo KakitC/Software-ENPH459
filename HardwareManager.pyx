@@ -1,11 +1,12 @@
+"""
+HardwareManager.pyx
+The HardwareManager object class, for maintaining laser cutter state and
+control and setting interfaces
+"""
 __author__ = 'kakit'
 
 #import hardwareDriver as hd
 cimport hardwareDriver as hd
-
-# Define vars
-BED_XMAX = 200
-BED_YMAX = 250
 
 class HardwareManager:
     """ An object to track all laser cutter hardware state information and
@@ -13,19 +14,27 @@ class HardwareManager:
 
     Uses hardwareDriver functions to do the actual GPIO accesses, but
     otherwise implements the control and sensor interface functions.
+    Only one HardwareManager should exist per laser cutter, or else GPIO
+    access conflicts will occur, among other errors.
     """
 
     def __init__(self):
         """ Instantiate and initialize default settings for HardwareManager.
         """
-        self.x, self.y = 0.0, 0.0
-        self.step_cal = 12.7
-        self.cut_spd = 1
-        self.travel_spd = 50
+
+        # Default vals and settings
+        self.step_cal = 12.7  # steps/mm
+        self.cut_spd = 1  # mm/s
+        self.travel_spd = 50  # mm/s
+        self.las_mask = [[255]] # 255: White - PIL Image 0-255 vals
+        self.las_dpi = 0.0001 # ~0 DPI, 1 pixel for whole space
+        self.bed_xmax = 200  #
+        self.bed_ymax = 250
+
+        # Vals on init
         self.homed = False
         self.motors_enabled = False
-        self.las_mask = [[255]] # White - PIL Image 0-255 vals
-        self.las_dpi = 0.0001 # ~0 DPI, 1 pixel for whole space
+        self.x, self.y = 0.0, 0.0
         if hd.gpio_init() != 0:
             raise IOError("GPIO not initialized correctly")
 
@@ -72,13 +81,25 @@ class HardwareManager:
 
     def home_xy(self):
         """ Initialize laser position by moving to endstop min position (0,0).
+        :return: 0 if successful, -1 if an error occured
         """
-
-        hd.motor_enable()
-        self.motors_enabled = True
+        if not self.motors_enabled:
+            self.motor_en_disable(1)
 
         # TODO put in homing routine
-        stop = self.laser_cut(100, 100, -BED_XMAX, 0, "blank")
+        # Move XY to -bedmax, until an switch is triggered
+        # If it's safety feet, stop
+        # If it's either, move it back out (ignoring endstops here), then back
+        # If it's both, move them back out, then individually back in
+        # TODO Figure out how to ignore endstops for homing
+        if self.laser_cut(-self.bed_xmax, 0, las_setting="blank") != hd.XMIN:
+            return -1
+        while self.laser_cut(1, 0, las_setting="blank") != 0:
+            pass
+
+        if self.laser_cut(0, -self.bed_ymax, las_setting="blank") != hd.YMIN:
+            return -1
+
         self.x, self.y = 0, 0
         self.homed = True
 
@@ -122,8 +143,11 @@ class HardwareManager:
 
         if en:
             hd.motor_enable()
+            self.motors_enabled = True
         else:
             hd.motor_disable()
+            self.motors_enabled = False
+            self.homed = False
 
 
     def laser_cut(self, double x_delta, double y_delta,
