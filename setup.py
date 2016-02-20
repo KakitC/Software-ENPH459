@@ -18,8 +18,8 @@ extensions = [
               ["HardwareManager.pyx"]
               )
     ,
-    Extension("gcodeInterface",
-              ["gcodeInterface.pyx"]
+    Extension("GcodeInterface",
+              ["GcodeInterface.pyx"]
               )
 ]
 setup(

@@ -13,7 +13,6 @@ import time
 
 import platform
 import os
-from HardwareManager import HardwareManager
 from time import time
 
 OS = platform.system()
@@ -21,10 +20,12 @@ if OS == "Windows":
     print "WARNING: This will not work in Windows"
     #os.system("build.bat")
 else:
+    print "Recompiling..."
     os.system("sh build.sh")
     os.nice(-20)
 
 import HardwareManager as HM
 import hardwareDriver as hd
+import GcodeInterface as GI
 
-hman = HM.HardwareManager()
+gman = GI.GcodeInterface()

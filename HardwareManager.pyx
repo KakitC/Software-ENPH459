@@ -8,7 +8,7 @@ __author__ = 'kakit'
 #import hardwareDriver as hd
 cimport hardwareDriver as hd
 
-class HardwareManager:
+class HardwareManager(object):
     """ An object to track all laser cutter hardware state information and
     settings, and presents the hardware control and sensor interfaces.
 
@@ -151,7 +151,7 @@ class HardwareManager:
 
 
     def laser_cut(self, double x_delta, double y_delta,
-                   double cut_spd=None, double travel_spd=None,
+                   double cut_spd=-1, double travel_spd=-1,
                   las_setting="default"):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
@@ -193,9 +193,9 @@ class HardwareManager:
             return -1
 
         # Store speed values as last used
-        if cut_spd is not None:
+        if cut_spd > 0:
             self.cut_spd = cut_spd
-        if travel_spd is not None:
+        if travel_spd > 0:
             self.travel_spd = travel_spd
 
         # TODO Check command against soft XY limits

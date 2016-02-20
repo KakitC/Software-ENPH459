@@ -9,17 +9,19 @@ and https://en.wikipedia.org/wiki/G-code
 __author__ = 'kakit'
 
 from HardwareManager import HardwareManager
+
 class GcodeInterface(HardwareManager):
     """ An interface layer on top of the base HardwareManager which implements
     a G-code style interface in terms of the hardware access functions.
     """
     def __init__(self):
-        super(GcodeInterface, self).__init__(self)
+        # super(self.__class__, self).__init__(self)  # super doesn't work
+        HardwareManager.__init__(self)
         self.relative = False
         self.las_on = False
 
 
-    def G0(self, x, y, f=None):
+    def G0(self, x, y, f=-1):
         """ G0: Rapid move.
 
         Does not fire laser, otherwise identical to G1
@@ -29,19 +31,19 @@ class GcodeInterface(HardwareManager):
         :param f: New feedrate in mm/min (Optional)
         :return: void
         """
-        if f is not None:
-            self.set_speed(self.cut_spd, self.travel_spd)
+        if f > 0:
+            self.set_speed(self.cut_spd, f/60.)
 
         x_delta, y_delta = x, y
         if not self.relative:
             x_delta -= self.x
             y_delta -= self.y
 
-        self.laser_cut(x_delta, y_delta, "blank")
+        self.laser_cut(x_delta, y_delta, las_setting="blank")
         # TODO raise exceptions
 
 
-    def G1(self, x, y, f=None):
+    def G1(self, x, y, f=-1):
         """ G1: Controlled Move
 
         If feedrate is given, it will be stored as the travel speed or the
@@ -53,7 +55,7 @@ class GcodeInterface(HardwareManager):
         :param f: New feedrate in mm/min (Optional)
         :return: void
         """
-        if f is not None:
+        if f > 0:
             if self.las_on:
                 self.set_speed(f/60., self.travel_spd)
             else:
@@ -65,7 +67,7 @@ class GcodeInterface(HardwareManager):
             y_delta -= self.y
 
         las_setting = "default" if self.las_on else "blank"
-        self.laser_cut(x_delta, y_delta)
+        self.laser_cut(x_delta, y_delta, las_setting=las_setting)
         # TODO raise exceptions
 
 
@@ -245,7 +247,7 @@ class GcodeInterface(HardwareManager):
             self.step_cal = y
 
 
-    def M106(self, p=0, s):
+    def M106(self, p, s):
         """ M106: Fan On
 
         NOT IMPLEMENTED

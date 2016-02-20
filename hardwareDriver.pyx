@@ -91,7 +91,7 @@ cdef int USEC_PER_SEC = 1000000
 
 # Motor outputs
 # MOT_N is an array, with indices enums EN, STEP, DIR
-cdef int EN     = 0
+cdef int EN     = 0  # ACTIVE LOW
 cdef int STEP   = 1
 cdef int DIR    = 2
 cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
@@ -105,10 +105,10 @@ MOT_A[DIR]      = _RPI_V2_GPIO_P1_07
 cdef int MOT_B[3]
 MOT_B[EN]       = _RPI_V2_GPIO_P1_08
 MOT_B[STEP]     = _RPI_V2_GPIO_P1_10
-MOT_B[DIR]      = _RPI_V2_GPIO_P1_11
+MOT_B[DIR]      = _RPI_V2_GPIO_P1_12
 
 # Laser output
-LAS             = _RPI_V2_GPIO_P1_12
+LAS             = _RPI_V2_GPIO_P1_11
 
 # All input switches
 cdef int XMIN       = 0
@@ -190,8 +190,8 @@ cdef void motor_enable():
     :return: void
     """
 
-    bcm2835_gpio_set(MOT_A[EN])
-    bcm2835_gpio_set(MOT_B[EN])
+    bcm2835_gpio_clr(MOT_A[EN])
+    bcm2835_gpio_clr(MOT_B[EN])
 
 
 cdef void motor_disable():
@@ -200,8 +200,8 @@ cdef void motor_disable():
     :return: void
     """
 
-    bcm2835_gpio_clr(MOT_A[EN])
-    bcm2835_gpio_clr(MOT_B[EN])
+    bcm2835_gpio_set(MOT_A[EN])
+    bcm2835_gpio_set(MOT_B[EN])
 
 
 cdef void las_pulse(double time):
@@ -230,7 +230,7 @@ cdef int read_switches():
     cdef int retval = 0
 
     for pin in list_of_sw_pins:
-        retval |= bcm2835_gpio_lev(SWS[pin]) << pin
+        retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
 
     return retval
 
