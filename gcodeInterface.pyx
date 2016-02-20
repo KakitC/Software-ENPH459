@@ -32,7 +32,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
         if f > 0:
-            self.set_speed(self.cut_spd, f/60.)
+            self.set_spd(self.cut_spd, f / 60.)
 
         x_delta, y_delta = x, y
         if not self.relative:
@@ -57,9 +57,9 @@ class GcodeInterface(HardwareManager):
         """
         if f > 0:
             if self.las_on:
-                self.set_speed(f/60., self.travel_spd)
+                self.set_spd(f / 60., self.travel_spd)
             else:
-                self.set_speed(self.cut_spd, f/60.)
+                self.set_spd(self.cut_spd, f / 60.)
 
         x_delta, y_delta = x, y
         if not self.relative:
@@ -141,7 +141,7 @@ class GcodeInterface(HardwareManager):
         """
 
         self.las_on = False
-        self.motor_en_disable(0)
+        self.mots_en(0)
         raise SystemExit("M0: Unconditional Stop called")
 
 
@@ -154,7 +154,7 @@ class GcodeInterface(HardwareManager):
         """
 
         self.las_on = False
-        self.motor_en_disable(0)
+        self.mots_en(0)
 
 
     def M3(self, s):
@@ -189,7 +189,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        self.motor_en_disable(1)
+        self.mots_en(1)
 
 
     def M18(self):
@@ -198,7 +198,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        self.motor_en_disable(0)
+        self.mots_en(0)
 
 
     def M42(self, p, s):

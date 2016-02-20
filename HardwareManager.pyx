@@ -62,7 +62,7 @@ class HardwareManager(object):
         self.step_cal = step_cal
 
 
-    def set_speed(self, cut_spd, travel_spd):
+    def set_spd(self, cut_spd, travel_spd):
         """ Sets the default speed of the laser head for if it is not specified
         during the moving operation.
 
@@ -84,7 +84,7 @@ class HardwareManager(object):
         :return: 0 if successful, -1 if an error occured
         """
         if not self.motors_enabled:
-            self.motor_en_disable(1)
+            self.mots_en(1)
 
         # TODO put in homing routine
         # Move XY to -bedmax, until an switch is triggered
@@ -92,13 +92,6 @@ class HardwareManager(object):
         # If it's either, move it back out (ignoring endstops here), then back
         # If it's both, move them back out, then individually back in
         # TODO Figure out how to ignore endstops for homing
-        if self.laser_cut(-self.bed_xmax, 0, las_setting="blank") != hd.XMIN:
-            return -1
-        while self.laser_cut(1, 0, las_setting="blank") != 0:
-            pass
-
-        if self.laser_cut(0, -self.bed_ymax, las_setting="blank") != hd.YMIN:
-            return -1
 
         self.x, self.y = 0, 0
         self.homed = True
@@ -131,7 +124,7 @@ class HardwareManager(object):
 
         return hd.read_switches()
 
-    def motor_en_disable(self, bint en):
+    def mots_en(self, bint en):
         """ Enable or disable stepper motors.
 
         This is a wrapper for a hardwareDriver function.
@@ -151,7 +144,7 @@ class HardwareManager(object):
 
 
     def laser_cut(self, double x_delta, double y_delta,
-                   double cut_spd=-1, double travel_spd=-1,
+                   # double cut_spd=-1, double travel_spd=-1,
                   las_setting="default"):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
@@ -192,11 +185,11 @@ class HardwareManager(object):
         if not self.homed or not self.motors_enabled:
             return -1
 
-        # Store speed values as last used
-        if cut_spd > 0:
-            self.cut_spd = cut_spd
-        if travel_spd > 0:
-            self.travel_spd = travel_spd
+        # # Store speed values as last used
+        # if cut_spd > 0:
+        #     self.cut_spd = cut_spd
+        # if travel_spd > 0:
+        #     self.travel_spd = travel_spd
 
         # TODO Check command against soft XY limits
         # TODO Check speed against max toggle rate (~<1kHz) and limit
