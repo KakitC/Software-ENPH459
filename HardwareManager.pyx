@@ -23,11 +23,11 @@ class HardwareManager(object):
         """
 
         # Default vals and settings
-        self.step_cal = 12.7  # steps/mm
+        self.step_cal = 10  # steps/mm
         self.cut_spd = 1  # mm/s
-        self.travel_spd = 50  # mm/s
+        self.travel_spd = 30  # mm/s
         self.las_mask = [[255]] # 255: White - PIL Image 0-255 vals
-        self.las_dpi = 0.0001 # ~0 DPI, 1 pixel for whole space
+        self.las_dpi = 0.00001 # ~0 DPI, 1 pixel for whole space
         self.bed_xmax = 200  #
         self.bed_ymax = 250
 
@@ -37,6 +37,12 @@ class HardwareManager(object):
         self.x, self.y = 0.0, 0.0
         if hd.gpio_init() != 0:
             raise IOError("GPIO not initialized correctly")
+
+    def __del__(self):
+        # TODO document this
+        # TODO check this works/ is good enough
+        self.mots_en(0)
+        hd.gpio_close()
 
 ################### SETTINGS INTERFACE FUNCTIONS #####################
 
@@ -197,6 +203,10 @@ class HardwareManager(object):
         cdef int a_delta = int(round((x_delta + y_delta) * self.step_cal))
         cdef int b_delta = int(round((x_delta - y_delta) * self.step_cal))
 
+        # TODO Check against a 0 distance move
+        if a_delta == 0 and b_delta == 0:
+            return 0
+
         # Create step list, lasing list, timing list
         step_list = self._gen_step_list(a_delta, b_delta)
         las_list = self._gen_las_list(step_list, setting=las_setting)
@@ -210,8 +220,10 @@ class HardwareManager(object):
 
         # Update position tracking
         # TODO track error in x and y delta and do something about it
-        self.x += 0.5*(a_delta + b_delta) * self.step_cal
-        self.y += 0.5*(a_delta - b_delta) * self.step_cal
+        # self.x += 0.5*(a_delta + b_delta) / self.step_cal
+        # self.y += 0.5*(a_delta - b_delta) / self.step_cal
+        self.x += x_delta
+        self.y += y_delta
 
         return 0
 

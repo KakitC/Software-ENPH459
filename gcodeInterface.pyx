@@ -20,6 +20,13 @@ class GcodeInterface(HardwareManager):
         self.relative = False
         self.las_on = False
 
+    def __del__(self):
+        self.las_on = False
+        HardwareManager.__del__(self)
+
+
+################### G code functions ###############################
+    # TODO Compile doc list of G code functions here
 
     def G0(self, x, y, f=-1):
         """ G0: Rapid move.
@@ -131,6 +138,8 @@ class GcodeInterface(HardwareManager):
 
         self.x, self.y = x, y
 
+####################### M Code Functions ################################
+    # TODO Compile doc list of M code functions here
 
     def M0(self):
         """ M0: Unconditional Stop

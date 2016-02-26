@@ -229,6 +229,10 @@ cdef int read_switches():
     """
     cdef int retval = 0
 
+    # TODO DISABLES SWITCH CHECKING FOR DEBUGGING, REMOVE THIS
+    # DISABLE SWITCH CHECKING EVER
+    return retval
+
     for pin in list_of_sw_pins:
         retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
 
