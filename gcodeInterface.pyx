@@ -8,6 +8,8 @@ and https://en.wikipedia.org/wiki/G-code
 """
 __author__ = 'kakit'
 
+#TODO Turn file back into .py because it's sloooow to compile
+
 from HardwareManager import HardwareManager
 
 class GcodeInterface(HardwareManager):
@@ -19,6 +21,11 @@ class GcodeInterface(HardwareManager):
         HardwareManager.__init__(self)
         self.relative = False
         self.las_on = False
+        self.cmd_list = [
+            "G0", "G1", "G20", "G21", "G28", "G90", "G91", "G92",
+            "M0", "M1", "M3", "M5", "M17", "M18", "M42", "M72", "M92",
+            "M106", "M107", "M114", "M115", "M119"
+        ]
 
     def __del__(self):
         self.las_on = False
@@ -46,8 +53,9 @@ class GcodeInterface(HardwareManager):
             x_delta -= self.x
             y_delta -= self.y
 
-        self.laser_cut(x_delta, y_delta, las_setting="blank")
-        # TODO raise exceptions
+        retval = self.laser_cut(x_delta, y_delta, las_setting="blank")
+        if retval != 0:
+            raise RuntimeError("G0 Switch was triggered: " + bin(retval))
 
 
     def G1(self, x, y, f=-1):
@@ -56,6 +64,9 @@ class GcodeInterface(HardwareManager):
         If feedrate is given, it will be stored as the travel speed or the
         cutting speed, depending on whether or not the laser is enabled at the
         start of the move/cut.
+
+        If an endstop is triggered or the safety switches are triggered, a
+        RuntimeError exception will be raised.
 
         :param x: X value
         :param y: Y value
@@ -74,8 +85,9 @@ class GcodeInterface(HardwareManager):
             y_delta -= self.y
 
         las_setting = "default" if self.las_on else "blank"
-        self.laser_cut(x_delta, y_delta, las_setting=las_setting)
-        # TODO raise exceptions
+        retval = self.laser_cut(x_delta, y_delta, las_setting=las_setting)
+        if retval != 0:
+            raise RuntimeError("G1 Switch was triggered: " + bin(retval))
 
 
     def G20(self):
@@ -85,7 +97,7 @@ class GcodeInterface(HardwareManager):
 
         :return: void
         """
-        raise NotImplementedError("G20: Set Units to Inches not implemented")
+        raise NotImplementedError("G20 Set Units to Inches not implemented")
 
 
     def G21(self):
@@ -95,7 +107,7 @@ class GcodeInterface(HardwareManager):
 
         :return: void
         """
-        raise NotImplementedError("G21: Set Units to mm not implemented")
+        raise NotImplementedError("G21 Set Units to mm not implemented")
 
 
     def G28(self):
@@ -104,7 +116,7 @@ class GcodeInterface(HardwareManager):
         """
 
         if self.home_xy() != 0:
-            raise RuntimeError("Homing sequence failed")
+            raise RuntimeError("G28 Homing sequence failed")
 
 
     def G90(self):
@@ -222,7 +234,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        raise NotImplementedError("M42: Switch I/O Pin not implemented")
+        raise NotImplementedError("M42 Switch I/O Pin not implemented")
 
 
     def M72(self, p):
@@ -235,7 +247,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        raise NotImplementedError("M72: Play a Tone or Song not implemented")
+        raise NotImplementedError("M72 Play a Tone or Song not implemented")
 
 
     def M92(self, x=None, y=None):
@@ -268,7 +280,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        raise NotImplementedError("M106: Fan On not implemented")
+        raise NotImplementedError("M106 Fan On not implemented")
 
 
     def M107(self):
@@ -279,7 +291,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        raise NotImplementedError("M107: Fan Off not implemented")
+        raise NotImplementedError("M107 Fan Off not implemented")
 
 
     def M114(self):

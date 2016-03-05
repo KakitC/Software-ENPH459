@@ -3,6 +3,9 @@ HardwareManager.pyx
 The HardwareManager object class, for maintaining laser cutter state and
 control and setting interfaces
 """
+# TODO Break up helper functions into a .pyx file and convert this to .py
+# Compiling takes forever because the generated c file is yuuuuge
+
 __author__ = 'kakit'
 
 #import hardwareDriver as hd
@@ -212,11 +215,15 @@ class HardwareManager(object):
         las_list = self._gen_las_list(step_list, setting=las_setting)
         time_list = self._gen_time_list(self.cut_spd, self.travel_spd, las_list)
 
+        # TODO break up command into multiple cuts so OS can schedule interrupts
         # Move laser head, with precise timings
         retval = hd.move_laser(step_list, las_list, time_list)
         if retval != 0:
             return retval
-        #TODO raise exceptions: end stop trigger, safety switch trigger
+        # TODO raise exceptions: end stop trigger, safety switch trigger
+        # TODO What levels of functions should raise exceptions or error codes?
+        # Currently using: low-level returns non-zero vals, high level raise
+
 
         # Update position tracking
         # TODO track error in x and y delta and do something about it

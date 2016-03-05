@@ -96,7 +96,6 @@ cdef int STEP   = 1
 cdef int DIR    = 2
 cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
 
-# TODO Check logic active low for EN/switch pins
 cdef int MOT_A[3]
 MOT_A[EN]       = _RPI_V2_GPIO_P1_03
 MOT_A[STEP]     = _RPI_V2_GPIO_P1_05
@@ -110,6 +109,7 @@ MOT_B[DIR]      = _RPI_V2_GPIO_P1_12
 # Laser output
 LAS             = _RPI_V2_GPIO_P1_11
 
+# TODO Check logic active hi/low for switch pins
 # All input switches
 cdef int XMIN       = 0
 cdef int XMAX       = 1
@@ -190,6 +190,7 @@ cdef void motor_enable():
     :return: void
     """
 
+    # Active low
     bcm2835_gpio_clr(MOT_A[EN])
     bcm2835_gpio_clr(MOT_B[EN])
 
@@ -200,6 +201,7 @@ cdef void motor_disable():
     :return: void
     """
 
+    # Active low
     bcm2835_gpio_set(MOT_A[EN])
     bcm2835_gpio_set(MOT_B[EN])
 
