@@ -4,10 +4,10 @@ HManHelper.pyx
 """
 __author__ = 'kakit'
 
-import hardwareDriver as hd
+cimport hardwareDriver as hd
 
-cpdef laser_cut(self, double x_delta, double y_delta,
-              las_setting="default"):
+cpdef laser_cut(hman, double x_delta, double y_delta,
+                las_setting="default"):
     """ Perform a single straight-line motion of the laser head
     while firing the laser according to the mask image.
 
@@ -17,6 +17,8 @@ cpdef laser_cut(self, double x_delta, double y_delta,
     Uses image bitmap from las_mask as the masking bits, or quick options
     from las_setting.
 
+    :param hman: Hardware Manager object
+    :type: HardwareManager
     :param x_delta: X position change in mm
     :type: double
     :param y_delta: Y position change in mm
@@ -40,30 +42,30 @@ cpdef laser_cut(self, double x_delta, double y_delta,
     # 6. cleanup, return
 
     # Check if hardware was initialized
-    if not self.homed or not self.motors_enabled:
+    if not hman.homed or not hman.motors_enabled:
         return -1
 
     # Moved cutting speed code to GcodeManager
     # # Store speed values as last used
     # if cut_spd > 0:
-    #     self.cut_spd = cut_spd
+    #     hman.cut_spd = cut_spd
     # if travel_spd > 0:
-    #     self.travel_spd = travel_spd
+    #     hman.travel_spd = travel_spd
 
     # TODO Check command against soft XY limits
     # TODO Check speed against max toggle rate (~<1kHz) and limit
     # Convert to A,B pixels delta
-    cdef int a_delta = int(round((x_delta + y_delta) * self.step_cal))
-    cdef int b_delta = int(round((x_delta - y_delta) * self.step_cal))
+    cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
+    cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
 
     # TODO Check against a 0 distance move
     if a_delta == 0 and b_delta == 0:
         return 0
 
     # Create step list, lasing list, timing list
-    step_list = self._gen_step_list(a_delta, b_delta)
-    las_list = self._gen_las_list(step_list, setting=las_setting)
-    time_list = self._gen_time_list(self.cut_spd, self.travel_spd, las_list)
+    step_list = _gen_step_list(a_delta, b_delta)
+    las_list = _gen_las_list(hman, step_list, setting=las_setting)
+    time_list = _gen_time_list(hman, las_list)
 
     # TODO break up command into multiple cuts so OS can schedule interrupts
     # Move laser head, with precise timings
@@ -77,15 +79,15 @@ cpdef laser_cut(self, double x_delta, double y_delta,
 
     # Update position tracking
     # TODO track error in x and y delta and do something about it
-    # self.x += 0.5*(a_delta + b_delta) / self.step_cal
-    # self.y += 0.5*(a_delta - b_delta) / self.step_cal
-    self.x += x_delta
-    self.y += y_delta
+    # hman.x += 0.5*(a_delta + b_delta) / hman.step_cal
+    # hman.y += 0.5*(a_delta - b_delta) / hman.step_cal
+    hman.x += x_delta
+    hman.y += y_delta
 
     return 0
 
 ############################# INTERNAL FUNCTIONS ############################
-def _gen_step_list(self, int a_delta, int b_delta):
+def _gen_step_list(int a_delta, int b_delta):
     """ Create a list of A/B steps from X/Y coordinates and step size.
 
     Uses Bresenhem line rasterization algorithm.
@@ -141,7 +143,7 @@ def _gen_step_list(self, int a_delta, int b_delta):
     return step_list
 
 
-def _gen_las_list(self, step_list, setting="default"):
+def _gen_las_list(hman, step_list, setting="default"):
     """ Create a list of 1-bit laser power (on/off) for cutting path.
 
     Has options for generating stock las_list's quickly. Currently supports:
@@ -160,29 +162,29 @@ def _gen_las_list(self, step_list, setting="default"):
     if setting == "dark":
         return [1 for i in range(len(step_list))]
 
-    cdef double x_now = self.x
-    cdef double y_now = self.y
-    cdef int mask_xsize = len(self.las_mask)
-    cdef int mask_ysize = len(self.las_mask[0])
+    cdef double x_now = hman.x
+    cdef double y_now = hman.y
+    cdef int mask_xsize = len(hman.las_mask)
+    cdef int mask_ysize = len(hman.las_mask[0])
     cdef int x_px, y_px
 
     las_list = []
 
     for i in step_list:
-        x_now += 0.5*(i[0] + i[1]) * self.step_cal
-        y_now += 0.5*(i[0] - i[1]) * self.step_cal
+        x_now += 0.5*(i[0] + i[1]) * hman.step_cal
+        y_now += 0.5*(i[0] - i[1]) * hman.step_cal
 
         # Sets laser power to 0 if mask is 255 (blank = don't cut)
         # TODO account for out-of-bounds errors
-        x_px = int(x_now * self.las_dpi)
-        y_px = int(y_now * self.las_dpi)
+        x_px = int(x_now * hman.las_dpi)
+        y_px = int(y_now * hman.las_dpi)
 
-        las_list.append(1 if self.las_mask[x_px][y_px] != 255 else 0)
+        las_list.append(1 if hman.las_mask[x_px][y_px] != 255 else 0)
 
     return las_list
 
 
-def _gen_time_list(self, cut_spd, travel_spd, las_list):
+def _gen_time_list(hman, las_list):
     """ Create a list of times to stay at each step for laser cutting
     or moving.
 
@@ -194,6 +196,6 @@ def _gen_time_list(self, cut_spd, travel_spd, las_list):
 
     # TODO do 8 bit timings
     # TODO account for diagonal travel being faster than orthogonal
-    return [int(hd.USEC_PER_SEC / (cut_spd * self.step_cal)) if i
-            else int(hd.USEC_PER_SEC / (travel_spd * self.step_cal))
+    return [int(hd.USEC_PER_SEC / (hman.cut_spd * hman.step_cal)) if i
+            else int(hd.USEC_PER_SEC / (hman.travel_spd * hman.step_cal))
             for i in las_list]

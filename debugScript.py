@@ -6,7 +6,7 @@ interpreter. Uses debugImport.py to do all the setup.
 __author__="kakit"
 
 # Import everything
-execfile("debugImport.py")
+execfile("dbgImport.py")
 
 gman.set_step_cal(10)
 

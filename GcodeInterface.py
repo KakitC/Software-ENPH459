@@ -54,8 +54,10 @@ class GcodeInterface(HardwareManager):
             y_delta -= self.y
 
         retval = self.laser_cut(x_delta, y_delta, las_setting="blank")
-        if retval != 0:
+        if retval > 0:
             raise RuntimeError("G0 Switch was triggered: " + bin(retval))
+        elif retval < 0:
+            raise RuntimeError("G0 Laser not homed")
 
 
     def G1(self, x, y, f=-1):

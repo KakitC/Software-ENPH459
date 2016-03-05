@@ -7,7 +7,8 @@ control and setting interfaces
 __author__ = 'kakit'
 
 import hardwareDriver as hd
-import HManHelper as hmh
+import HManHelper as HMH
+
 
 class HardwareManager(object):
     """ An object to track all laser cutter hardware state information and
@@ -27,8 +28,8 @@ class HardwareManager(object):
         self.step_cal = 10  # steps/mm
         self.cut_spd = 1  # mm/s
         self.travel_spd = 30  # mm/s
-        self.las_mask = [[255]] # 255: White - PIL Image 0-255 vals
-        self.las_dpi = 0.00001 # ~0 DPI, 1 pixel for whole space
+        self.las_mask = [[255]]  # 255: White - PIL Image 0-255 vals
+        self.las_dpi = 0.00001  # ~0 DPI, 1 pixel for whole space
         self.bed_xmax = 200  #
         self.bed_ymax = 250
 
@@ -131,6 +132,7 @@ class HardwareManager(object):
 
         return hd.read_switches()
 
+
     def mots_en(self, en):
         """ Enable or disable stepper motors.
 
@@ -149,6 +151,7 @@ class HardwareManager(object):
             self.motors_enabled = False
             self.homed = False
 
+
     def laser_cut(self, x_delta, y_delta, las_setting="default"):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
@@ -162,4 +165,4 @@ class HardwareManager(object):
         :return:
         """
 
-        hmh.laser_cut(x_delta, y_delta, las_setting)
+        return HMH.laser_cut(self, x_delta, y_delta, las_setting)
