@@ -14,12 +14,8 @@ extensions = [
               libraries=["bcm2835"]
               )
     ,
-    Extension("HardwareManager",
-              ["HardwareManager.pyx"]
-              )
-    ,
-    Extension("GcodeInterface",
-              ["GcodeInterface.pyx"]
+    Extension("HManHelper",
+              ["HManHelper.pyx"]
               )
 ]
 setup(

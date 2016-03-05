@@ -128,7 +128,7 @@ SWS[SAFE_FEET] = _RPI_V2_GPIO_P1_19
 
 ############### External Interface Functions ##########################
 
-cdef int gpio_init():
+cpdef int gpio_init():
     """ Initialize GPIO pins on Raspberry Pi. Make sure to run program
     in "sudo" to allow GPIO to run.
 
@@ -152,7 +152,7 @@ cdef int gpio_init():
     return 0
 
 
-cdef void gpio_close():
+cpdef void gpio_close():
     """ Close GPIO connection. Call this when GPIO access is complete.
 
     :return: void
@@ -184,7 +184,7 @@ cpdef void gpio_test():
         bcm2835_gpio_clr(LAS)
 
 
-cdef void motor_enable():
+cpdef void motor_enable():
     """ Set stepper motor Enable pins
 
     :return: void
@@ -195,7 +195,7 @@ cdef void motor_enable():
     bcm2835_gpio_clr(MOT_B[EN])
 
 
-cdef void motor_disable():
+cpdef void motor_disable():
     """ Clear stepper motor Enable pins
 
     :return: void
@@ -206,7 +206,7 @@ cdef void motor_disable():
     bcm2835_gpio_set(MOT_B[EN])
 
 
-cdef void las_pulse(double time):
+cpdef void las_pulse(double time):
     """ Turn on the laser output for a given time, then turn off.
 
     For testing laser functionality. Don't have a function allowing raw access
@@ -222,18 +222,16 @@ cdef void las_pulse(double time):
     bcm2835_gpio_clr(LAS)
 
 
-cdef int read_switches():
+cpdef int read_switches():
     """ Read values of XY endstop switches and safety feet.
+
+    This is the sensor interface version of the function.
 
     :return: Bitwise 5-bit value for XMIN, XMAX, YMIN, YMAX, SAFE_FEET (LSB)
             (i.e. 0b01001 => 9: YMAX, XMIN)
     :rtype: int
     """
     cdef int retval = 0
-
-    # TODO DISABLES SWITCH CHECKING FOR DEBUGGING, REMOVE THIS
-    # DISABLE SWITCH CHECKING EVER
-    return retval
 
     for pin in list_of_sw_pins:
         retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
@@ -298,8 +296,8 @@ cdef int move_laser(step_list, las_list, time_list):
             bcm2835_gpio_set(MOT_A[STEP])
         if step_arrB[i] != 0:
             bcm2835_gpio_set(MOT_B[STEP])
-        retval = read_switches()  # Read switches in the middle of a step to
-                                  # prolong the width of a step pulse
+        retval = read_switches_fast()  # Read switches in the middle of a step
+                                       # to prolong the width of a step pulse
         bcm2835_gpio_clr(MOT_A[STEP])
         bcm2835_gpio_clr(MOT_B[STEP])
 
@@ -350,3 +348,23 @@ cdef inline int time_diff(timeval start, timeval end):
 
     return (end.tv_sec - start.tv_sec)*USEC_PER_SEC \
             + (end.tv_usec - start.tv_usec)
+
+cdef int read_switches_fast():
+    """ Read values of XY endstop switches and safety feet.
+
+    This is the cdef only version, for faster reads.
+
+    :return: Bitwise 5-bit value for XMIN, XMAX, YMIN, YMAX, SAFE_FEET (LSB)
+            (i.e. 0b01001 => 9: YMAX, XMIN)
+    :rtype: int
+    """
+    cdef int retval = 0
+
+    # TODO DISABLES SWITCH CHECKING FOR DEBUGGING, REMOVE THIS
+    # DISABLE SWITCH CHECKING EVER
+    return retval
+
+    for pin in list_of_sw_pins:
+        retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
+
+    return retval
