@@ -8,9 +8,8 @@ and https://en.wikipedia.org/wiki/G-code
 """
 __author__ = 'kakit'
 
-#TODO Turn file back into .py because it's sloooow to compile
-
 from HardwareManager import HardwareManager
+
 
 class GcodeInterface(HardwareManager):
     """ An interface layer on top of the base HardwareManager which implements
@@ -22,9 +21,17 @@ class GcodeInterface(HardwareManager):
         self.relative = False
         self.las_on = False
         self.cmd_list = [
-            "G0", "G1", "G20", "G21", "G28", "G90", "G91", "G92",
-            "M0", "M1", "M3", "M5", "M17", "M18", "M42", "M72", "M92",
-            "M106", "M107", "M114", "M115", "M119"
+            "G0 X Y F", "G1 X Y F",  # Move
+            # "G20", "G21",  # Set units # not implemented
+            "G28",  # Home
+            "G90", "G91", "G92 X Y",  # Set abs/rel, position
+            "M0", "M1",  # Stop
+            "M3 S", "M5",  # las on/off
+            "M17", "M18",  # mot en/disable
+            # "M42", "M72",  # not implemented
+            "M92 X Y",  # Set step cal (mm/min)
+            # "M106 P S", "M107",  # fan control # not implemented
+            "M114", "M115", "M119"  # diagnostics, return values
         ]
 
     def __del__(self):
@@ -33,10 +40,18 @@ class GcodeInterface(HardwareManager):
 
 
 ################### G code functions ###############################
-    # TODO Compile doc list of G code functions here
+    """ G0: Rapid move
+        G1: Controlled Move
+        G20: Set Units to Inches
+        G21: Set Units to mm
+        G28: Move to origin (Home)
+        G90: Set to Absolute Positioning
+        G91: Set to Relative Positioning
+        G92: Set Position
+    """
 
-    def G0(self, x, y, f=-1):
-        """ G0: Rapid move.
+    def G0(self, x=None, y=None, f=None):
+        """ G0: Rapid move
 
         Does not fire laser, otherwise identical to G1
 
@@ -45,13 +60,22 @@ class GcodeInterface(HardwareManager):
         :param f: New feedrate in mm/min (Optional)
         :return: void
         """
-        if f > 0:
+        if f is not None:
             self.set_spd(self.cut_spd, f / 60.)
 
-        x_delta, y_delta = x, y
-        if not self.relative:
-            x_delta -= self.x
-            y_delta -= self.y
+        if x is not None:
+            x_delta = x
+            if not self.relative:
+                x_delta -= self.x
+        else:
+            x_delta = 0
+
+        if y is not None:
+            y_delta = y
+            if not self.relative:
+                y_delta -= self.y
+        else:
+            y_delta = 0
 
         retval = self.laser_cut(x_delta, y_delta, las_setting="blank")
         if retval > 0:
@@ -60,8 +84,10 @@ class GcodeInterface(HardwareManager):
             raise RuntimeError("G0 Laser not homed")
 
 
-    def G1(self, x, y, f=-1):
+    def G1(self, x=None, y=None, f=None):
         """ G1: Controlled Move
+
+        If X or Y are not given, the laser will not move on that axis.
 
         If feedrate is given, it will be stored as the travel speed or the
         cutting speed, depending on whether or not the laser is enabled at the
@@ -75,18 +101,29 @@ class GcodeInterface(HardwareManager):
         :param f: New feedrate in mm/min (Optional)
         :return: void
         """
-        if f > 0:
+        if f is not None:
             if self.las_on:
                 self.set_spd(f / 60., self.travel_spd)
             else:
                 self.set_spd(self.cut_spd, f / 60.)
 
-        x_delta, y_delta = x, y
-        if not self.relative:
-            x_delta -= self.x
-            y_delta -= self.y
+        if x is not None:
+            x_delta = x
+            if not self.relative:
+                x_delta -= self.x
+        else:
+            x_delta = 0
 
-        las_setting = "default" if self.las_on else "blank"
+        if y is not None:
+            y_delta = y
+            if not self.relative:
+                y_delta -= self.y
+        else:
+            y_delta = 0
+
+        # TODO Remove las=blank for debugging after finishing laser bitmap input
+        # las_setting = "default" if self.las_on else "blank"
+        las_setting = "blank"
         retval = self.laser_cut(x_delta, y_delta, las_setting=las_setting)
         if retval != 0:
             raise RuntimeError("G1 Switch was triggered: " + bin(retval))
@@ -153,7 +190,35 @@ class GcodeInterface(HardwareManager):
         self.x, self.y = x, y
 
 ####################### M Code Functions ################################
-    # TODO Compile doc list of M code functions here
+    """ M0: Unconditional Stop
+        M1: Sleep
+        M3: Spindle On (Laser On)
+        M5: Spindle Off (Laser Off)
+        M17: Enable All Stepper Motors
+        M18: Disable All Stepper Motors
+        M42: Switch I/O Pin
+        M72: Play a Tone or Song
+        M92: Set Axis Steps Per Unit
+        M106: Fan On
+        M107: Fan Off
+        M114: Get Current Position
+        M115: Get Firmware Version and Capabilities
+        M119: Get Endstop Status
+    """
+        # # NOT IMPLEMENTED
+        # M203: Set maximum feedrate
+        # M206 Marlin, Sprinter, Smoothie, RepRapFirmware - Set home offset
+        # M208: Set axis max travel
+        # M240: Trigger camera
+        # M300: Play beep sound
+        # M500: Store parameters in EEPROM
+        # M501: Read parameters from EEPROM
+        # M502: Revert to the default "factory settings."
+        # M503: Print settings
+        # M550: Set Name
+        # M552: Set IP address
+        # M553: Set Netmask
+
 
     def M0(self):
         """ M0: Unconditional Stop
@@ -180,7 +245,7 @@ class GcodeInterface(HardwareManager):
         self.mots_en(0)
 
 
-    def M3(self, s):
+    def M3(self, s=None):
         """ M3: Spindle On (Laser On)
 
         Adapted from standard G-code M3: Spindle On at S(RPM).
@@ -224,7 +289,7 @@ class GcodeInterface(HardwareManager):
         self.mots_en(0)
 
 
-    def M42(self, p, s):
+    def M42(self, p=None, s=None):
         """ M42: Switch I/O Pin
 
         NOT IMPLEMENTED
@@ -239,7 +304,7 @@ class GcodeInterface(HardwareManager):
         raise NotImplementedError("M42 Switch I/O Pin not implemented")
 
 
-    def M72(self, p):
+    def M72(self, p=None):
         """ M72: Play a Tone or Song
 
         NOT IMPLEMENTED
@@ -255,7 +320,7 @@ class GcodeInterface(HardwareManager):
     def M92(self, x=None, y=None):
         """ M92: Set Axis Steps Per Unit
 
-        Sets step_cal X or Y, or just X if both are give
+        Sets step_cal to X or Y, or just X if both are give
 
         :param x: steps/mm value
         :type: double
@@ -270,7 +335,7 @@ class GcodeInterface(HardwareManager):
             self.step_cal = y
 
 
-    def M106(self, p, s):
+    def M106(self, p=None, s=None):
         """ M106: Fan On
 
         NOT IMPLEMENTED
@@ -323,18 +388,3 @@ class GcodeInterface(HardwareManager):
         """
 
         return self.read_switches() & 0xf
-
-
-    # # NOT IMPLEMENTED
-    # M203: Set maximum feedrate
-    # M206 Marlin, Sprinter, Smoothie, RepRapFirmware - Set home offset
-    # M208: Set axis max travel
-    # M240: Trigger camera
-    # M300: Play beep sound
-    # M500: Store parameters in EEPROM
-    # M501: Read parameters from EEPROM
-    # M502: Revert to the default "factory settings."
-    # M503: Print settings
-    # M550: Set Name
-    # M552: Set IP address
-    # M553: Set Netmask

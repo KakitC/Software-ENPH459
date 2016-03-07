@@ -1,1 +1,0 @@
-cpdef laser_cut(hman, double x_delta, double y_delta, las_setting)

@@ -10,15 +10,23 @@ execfile("dbgImport.py")
 
 gman.set_step_cal(10)
 
-gman.set_spd(10, 100)
-
 gman.G28()  # home
 gman.G90()  # absolute
 
 try:
-    while True:
+
+    for i in range(4, 10, 1):
         # Move around in a square for motion demo
-        gman.G0(0, 0)
+        print "Speed (mm/s): ", i
+        gman.G0(0, 0, i*60)
+        gman.G0(10, 0)
+        gman.G0(10, 10)
+        gman.G0(0, 10)
+
+    for i in range(10, 120, 10):
+        # Move around in a square for motion demo
+        print "Speed (mm/s): ", i
+        gman.G0(0, 0, i*60)
         gman.G0(100, 0)
         gman.G0(100, 100)
         gman.G0(0, 100)

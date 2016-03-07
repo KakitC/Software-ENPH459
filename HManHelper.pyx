@@ -54,12 +54,13 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
 
     # TODO Check command against soft XY limits
     # TODO Check speed against max toggle rate (~<1kHz) and limit
+    # TODO Implement separate X/Y or A/B step_cal values
     # Convert to A,B pixels delta
     cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
     cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
 
-    # TODO Check against a 0 distance move
-    if a_delta == 0 and b_delta == 0:
+    # TODO Check against a 0 distance move for list errors
+    if a_delta == 0 and b_delta == 0:  # this kind of works
         return 0
 
     # Create step list, lasing list, timing list
