@@ -6,15 +6,24 @@ cutter hardware actions.
 G-code commands from reprap.org/wiki/G-code
 and https://en.wikipedia.org/wiki/G-code
 """
+
 __author__ = 'kakit'
 
+import re
 from HardwareManager import HardwareManager
+
+# TODO Implement custom error classes
+# HardwareError
+#   EstopError
+#   Limits error?
+# ParseError
 
 
 class GcodeInterface(HardwareManager):
     """ An interface layer on top of the base HardwareManager which implements
     a G-code style interface in terms of the hardware access functions.
     """
+
     def __init__(self):
         # super(self.__class__, self).__init__(self)  # super doesn't work
         HardwareManager.__init__(self)
@@ -34,9 +43,81 @@ class GcodeInterface(HardwareManager):
             "M114", "M115", "M119"  # diagnostics, return values
         ]
 
+
     def __del__(self):
         self.las_on = False
         HardwareManager.__del__(self)
+
+
+    def parse_gcode(self, filename):
+        """ Read gcode from a filepath, and execute the commands.
+
+        Raises IOError if file cannot be opened.
+
+        Raises a SyntaxWarning if there as an issue with the G-code parsing, due
+        either to the file being formatted incorrectly or the parser behaving
+        unexpectedly.
+
+        Passes along the StandardError sub-exception of some kind if there is an
+        issue with executing the commands.
+
+        :param filename: Directory path of the G-code file, absolute or relative
+        :type: string
+        :return: void, exceptions for errors.
+        """
+
+        try:
+            infile = open(filename)  # mode 'r'
+        except:
+            print("Could not open file")
+            raise
+
+        lines = infile.readlines()
+        execlist =[]
+
+        # Gcode parsing rules:
+        # Ex: N3 G1 X10.3 Y23.4 *34 ; comment
+        #
+        # Strip comments
+        # Strip any line number (N) fields
+        # Strip checksums
+        # Parse actual command
+        for i, j in lines, range(len(lines)):
+            orig_line = i
+            i = i.upper()
+            i = i[0:i.find(";")]  # strip comments
+            i = i.strip()
+            i = re.sub(r"N[0-9]*\s", "", i, 1)  # strip line numbers
+            i = i[0:i.find("*")]  # strip checksum
+
+            # Parse command into python code
+            line = i.split()
+            execstr = "self."
+            for cmd in self.cmd_list:
+                cmd = cmd.split()
+
+                if line[0] == cmd[0]:  # found it
+                    execstr += cmd[0] + "("  # construct direct python function call
+                    cmd.pop(0)
+                    line.pop(0)
+
+                    # TODO Parse Gcode parameters (X Y F S P)
+
+                    execstr += ")"
+                    execlist.append(execstr)
+                    break  # done making command for this line
+            else: # call not found in cmd_list
+                raise SyntaxError("G-code file parsing error: Command not found"
+                                  "at \n" + "line " + str(j) + ": " + orig_line)
+        # Finished parsing file
+        infile.close()
+
+        # TODO should this be changed to execute line by line? Currently parses all
+        for execstr in execlist:
+            # TODO Debug: change back from print to exec
+            # exec(execstr)
+            print(execstr)
+
 
 
 ################### G code functions ###############################
@@ -61,7 +142,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
         if f is not None:
-            self.set_spd(self.cut_spd, f / 60.)
+            self.set_spd(travel_spd=f / 60.)
 
         if x is not None:
             x_delta = x
@@ -103,9 +184,9 @@ class GcodeInterface(HardwareManager):
         """
         if f is not None:
             if self.las_on:
-                self.set_spd(f / 60., self.travel_spd)
+                self.set_spd(cut_spd=f / 60.)
             else:
-                self.set_spd(self.cut_spd, f / 60.)
+                self.set_spd(travel_spd=f / 60.)
 
         if x is not None:
             x_delta = x
@@ -230,6 +311,7 @@ class GcodeInterface(HardwareManager):
 
         self.las_on = False
         self.mots_en(0)
+        # TODO Change stopall exception to something less lethal than SystemExit
         raise SystemExit("M0: Unconditional Stop called")
 
 

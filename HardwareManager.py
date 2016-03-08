@@ -29,6 +29,7 @@ class HardwareManager(object):
         self.cut_spd = 1  # mm/s
         self.travel_spd = 30  # mm/s
         self.las_mask = [[255]]  # 255: White - PIL Image 0-255 vals
+        # TODO Reconsider HwMan las_mask internal representation
         self.las_dpi = 0.00001  # ~0 DPI, 1 pixel for whole space
         self.bed_xmax = 200  #
         self.bed_ymax = 250
@@ -38,7 +39,7 @@ class HardwareManager(object):
         self.motors_enabled = False
         self.x, self.y = 0.0, 0.0
         if hd.gpio_init() != 0:
-            raise IOError("GPIO not initialized correctly")
+            raise IOError("GPIO not initialized correctly; Do you have root?")
 
     def __del__(self):
         # TODO document this
@@ -70,9 +71,9 @@ class HardwareManager(object):
         self.step_cal = step_cal
 
 
-    def set_spd(self, cut_spd, travel_spd):
-        """ Sets the default speed of the laser head for if it is not specified
-        during the moving operation.
+    def set_spd(self, cut_spd=0, travel_spd=0):
+        """ Set the speed of the laser head for if it is not specified
+        during the move operation. Specify which speed to modify
 
         :param cut_spd: Laser speed while cutting in mm/s
         :type: double
@@ -81,8 +82,8 @@ class HardwareManager(object):
         :return: void
         """
 
-        self.cut_spd = cut_spd
-        self.travel_spd = travel_spd
+        self.cut_spd = cut_spd if cut_spd != 0 else self.cut_spd
+        self.travel_spd = travel_spd if travel_spd != 0 else self.travel_spd
 
 
 #################### HW INTERFACE FUNCTIONS ########################
@@ -94,12 +95,37 @@ class HardwareManager(object):
         if not self.motors_enabled:
             self.mots_en(1)
 
-        # TODO put in homing routine
+        self.set_spd(travel_spd=100)
+
         # Move XY to -bedmax, until an switch is triggered
         # If it's safety feet, stop
-        # If it's either, move it back out (ignoring endstops here), then back
-        # If it's both, move them back out, then individually back in
-        # TODO Figure out how to ignore endstops for homing
+        # If it's either, move it back out (ignoring endstops here)
+        x_flag, y_flag = 1, 1
+
+        while (not x_flag) and (not y_flag):
+            status = self.laser_cut(-x_flag * hd.XMAX, -y_flag * hd.YMAX,
+                                    "blank")
+            if status == 0 or (status & (0x1 << hd.SAFE_FEET)):
+                # If no endstops triggered after the move or safety is engaged
+                return -1
+            elif status & (0x1 << hd.YMAX + 0x1 << hd.XMAX):
+                # TODO account for if XMAX/YMAX switches are triggered?
+                return -1
+
+            # If hit minstop, use while to back away and override switch
+            # TODO Test how repeatable this is
+            if status & (0x1 << hd.YMIN):
+                self.set_spd(travel_spd=3)
+                while self.laser_cut(0, 1, "blank") != 0:
+                    pass
+                self.set_spd(travel_spd=100)
+                y_flag = 0
+            if status & (0x1 << hd.XMIN):
+                self.set_spd(travel_spd=3)
+                while self.laser_cut(1, 0, "blank") != 0:
+                    pass
+                self.set_spd(travel_spd=100)
+                x_flag = 0
 
         self.x, self.y = 0, 0
         self.homed = True

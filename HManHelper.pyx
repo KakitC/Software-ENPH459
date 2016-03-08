@@ -1,10 +1,13 @@
 """
 HManHelper.pyx
-
+A collection of Cython accelerated functions for use by the HardwareManager
+class. Primarily for the laser control algorithm.
 """
+
 __author__ = 'kakit'
 
 cimport hardwareDriver as hd
+
 
 cpdef laser_cut(hman, double x_delta, double y_delta,
                 las_setting="default"):
@@ -34,11 +37,11 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # 2. Create laser spot list from pathing step position vs image
     # 3. Create timing list from speeds and laser spot list
     # 4. Initialize and check things, clear interrupts?
-    # 5. Main movement loop, iterate on lists
-    # 5a. Step X,Y, set las
-    # 5b. Poll switches
-    #       if switches: Fail out, throw that exception
-    # 5c. Timing idle until next timing delta on list is passed
+    # 5. Main movement loop, iterate on lists (in hardwareDriver.pyx)
+    #   5a. Step X,Y, set las
+    #   5b. Poll switches
+    #       if switches: Fail out, return switches as error code
+    #   5c. Timing idle until next timing delta on list is passed
     # 6. cleanup, return
 
     # Check if hardware was initialized
@@ -88,7 +91,7 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     return 0
 
 ############################# INTERNAL FUNCTIONS ############################
-def _gen_step_list(int a_delta, int b_delta):
+cdef _gen_step_list(int a_delta, int b_delta):
     """ Create a list of A/B steps from X/Y coordinates and step size.
 
     Uses Bresenhem line rasterization algorithm.
@@ -119,7 +122,7 @@ def _gen_step_list(int a_delta, int b_delta):
         ab_flip_flag = True
 
     # Generate step list for line in first octant. Bresenham's algo here
-    # TODO Optimize step_list gen by using C arrays
+    # TODO Optimize gen_step_list by using C arrays
     step_list = []
     cdef int a_now = 0
     cdef int error = 2*b_delta - a_delta
@@ -144,12 +147,13 @@ def _gen_step_list(int a_delta, int b_delta):
     return step_list
 
 
-def _gen_las_list(hman, step_list, setting="default"):
+cdef _gen_las_list(hman, step_list, setting="default"):
     """ Create a list of 1-bit laser power (on/off) for cutting path.
 
     Has options for generating stock las_list's quickly. Currently supports:
     "blank" - All white, no cut
     "dark" - All black, cut everything
+    "default" - Compares projected position against laser darkfield bitmask
 
     :param step_list: List of A/B steps to take for cut operation
     :type: list[n][2] of int(+/-1 or 0)
@@ -162,12 +166,17 @@ def _gen_las_list(hman, step_list, setting="default"):
         return [0 for i in range(len(step_list))]
     if setting == "dark":
         return [1 for i in range(len(step_list))]
+    else:
+        # TODO finish implementing this properly
+        print "gen_las_list not verified, not cutting"
+        return [0 for i in range(len(step_list))]
 
     cdef double x_now = hman.x
     cdef double y_now = hman.y
     cdef int mask_xsize = len(hman.las_mask)
     cdef int mask_ysize = len(hman.las_mask[0])
     cdef int x_px, y_px
+    # TODO Cast las_mask as a C array for speed
 
     las_list = []
 
@@ -177,6 +186,7 @@ def _gen_las_list(hman, step_list, setting="default"):
 
         # Sets laser power to 0 if mask is 255 (blank = don't cut)
         # TODO account for out-of-bounds errors
+        # should actually be
         x_px = int(x_now * hman.las_dpi)
         y_px = int(y_now * hman.las_dpi)
 
@@ -185,7 +195,7 @@ def _gen_las_list(hman, step_list, setting="default"):
     return las_list
 
 
-def _gen_time_list(hman, las_list):
+cdef _gen_time_list(hman, las_list):
     """ Create a list of times to stay at each step for laser cutting
     or moving.
 
