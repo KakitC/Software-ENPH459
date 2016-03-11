@@ -7,7 +7,7 @@ class. Primarily for the laser control algorithm.
 __author__ = 'kakit'
 
 cimport hardwareDriver as hd
-
+cimport numpy as np
 
 cpdef laser_cut(hman, double x_delta, double y_delta,
                 las_setting="default"):
@@ -173,10 +173,13 @@ cdef _gen_las_list(hman, step_list, setting="default"):
 
     cdef double x_now = hman.x
     cdef double y_now = hman.y
-    cdef int mask_xsize = len(hman.las_mask)
-    cdef int mask_ysize = len(hman.las_mask[0])
+    # cdef int mask_xsize = len(hman.las_mask)
+    # cdef int mask_ysize = len(hman.las_mask[0])
+    cdef int mask_xsize = hman.las_mask.shape[0]
+    cdef int mask_ysize = hman.las_mask.shape[1]
     cdef int x_px, y_px
-    # TODO Cast las_mask as a C array for speed
+    # TODO Cast las_mask as a C array for speed and compatibility
+    # las_mask currently a numpy array
 
     las_list = []
 
@@ -191,6 +194,7 @@ cdef _gen_las_list(hman, step_list, setting="default"):
         y_px = int(y_now * hman.las_dpi)
 
         las_list.append(1 if hman.las_mask[x_px][y_px] != 255 else 0)
+        # las_list.append(hman.las_mask[x_px][y_px]) # 8b power settings
 
     return las_list
 

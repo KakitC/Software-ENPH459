@@ -6,6 +6,8 @@ control and setting interfaces
 
 __author__ = 'kakit'
 
+import array
+import numpy as np
 import hardwareDriver as hd
 import HManHelper as HMH
 
@@ -28,9 +30,8 @@ class HardwareManager(object):
         self.step_cal = 10  # steps/mm
         self.cut_spd = 1  # mm/s
         self.travel_spd = 30  # mm/s
-        self.las_mask = [[255]]  # 255: White - PIL Image 0-255 vals
-        # TODO Reconsider HwMan las_mask internal representation
-        self.las_dpi = 0.00001  # ~0 DPI, 1 pixel for whole space
+        self.las_mask = np.array([[255]])  # 255: White - PIL Image 0-255 vals
+        self.las_dpi = 0.00000001  # ~0 DPI, 1 pixel for whole space
         self.bed_xmax = 200  #
         self.bed_ymax = 250
 
@@ -42,23 +43,26 @@ class HardwareManager(object):
             raise IOError("GPIO not initialized correctly; Do you have root?")
 
     def __del__(self):
-        # TODO document this
+        """ Disable the laser upon quitting, and close the GPIO access.
+        """
         # TODO check this works/ is good enough
         self.mots_en(0)
         hd.gpio_close()
 
 ################### SETTINGS INTERFACE FUNCTIONS #####################
 
-    def set_las_mask(self, filepath, scale):
-        """ Set laser bit mask to an image on disk, stretched to scale
+    def set_las_mask(self, img, scale):
+        """ Set laser bit mask to an image, stretched to scale
 
-        :param filepath: Linux image full filepath and name
-        :type: string
+        :param img: Laser bitmask, 0
+        :type: PIL.Image.Image
         :param scale: DPI of the image
         :type: double
         :return: void
         """
-        self.las_mask = filepath # TODO REMOVE HACK
+        self.las_mask = np.array(img)
+        # Workaround for numpy not liking "1" mode images
+        #self.las_mask = np.array(list(img.getdata())).reshape(img.size)
         self.las_dpi = scale
 
 

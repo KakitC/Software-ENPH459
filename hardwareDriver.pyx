@@ -286,6 +286,7 @@ cdef int move_laser(step_list, las_list, time_list):
 
         # Set laser
         bcm2835_gpio_write(LAS, las_arr[i])
+        # bcm2835_gpio_write(LAS, 1 if las_arr[i] else 0)  # 8b power settings
 
         # Move steppers
         # MOT A DIR positive is _, MOT B DIR positive is _

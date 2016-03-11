@@ -97,7 +97,7 @@ class GcodeInterface(HardwareManager):
                 cmd = cmd.split()
 
                 if line[0] == cmd[0]:  # found it
-                    execstr += cmd[0] + "("  # construct direct python function call
+                    execstr += cmd[0] + "("  # construct direct python call
                     cmd.pop(0)
                     line.pop(0)
 
@@ -112,9 +112,10 @@ class GcodeInterface(HardwareManager):
         # Finished parsing file
         infile.close()
 
-        # TODO should this be changed to execute line by line? Currently parses all
+        # TODO should this be changed to execute line by line? Parses whole file
         for execstr in execlist:
             # TODO Debug: change back from print to exec
+            # TODO Catch exceptions
             # exec(execstr)
             print(execstr)
 
