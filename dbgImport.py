@@ -4,7 +4,6 @@ This file is for setting up all the imports at the beginning
 of an interactive debug session in the Python console.
 To use, type: execfile("debugImport.py")
 """
-__author__ = 'kakit'
 
 import PIL
 import numpy as np
@@ -13,7 +12,7 @@ import time
 
 import platform
 import os
-from time import time
+# from time import time
 
 OS = platform.system()
 if OS == "Windows":
@@ -27,5 +26,6 @@ else:
 import HardwareManager as HM
 import hardwareDriver as hd
 import GcodeInterface as GI
+
 
 gman = GI.GcodeInterface()

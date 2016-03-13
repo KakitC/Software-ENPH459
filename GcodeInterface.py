@@ -7,8 +7,7 @@ G-code commands from reprap.org/wiki/G-code
 and https://en.wikipedia.org/wiki/G-code
 """
 
-__author__ = 'kakit'
-
+from __future__ import division
 import re
 from HardwareManager import HardwareManager
 

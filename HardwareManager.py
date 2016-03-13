@@ -4,12 +4,12 @@ The HardwareManager object class, for maintaining laser cutter state and
 control and setting interfaces
 """
 
-__author__ = 'kakit'
+from __future__ import division
 
-import array
 import numpy as np
-import hardwareDriver as hd
+
 import HManHelper as HMH
+import hardwareDriver as hd
 
 
 class HardwareManager(object):
@@ -21,6 +21,7 @@ class HardwareManager(object):
     Only one HardwareManager should exist per laser cutter, or else GPIO
     access conflicts will occur, among other errors.
     """
+
 
     def __init__(self):
         """ Instantiate and initialize default settings for HardwareManager.
@@ -42,6 +43,7 @@ class HardwareManager(object):
         if hd.gpio_init() != 0:
             raise IOError("GPIO not initialized correctly; Do you have root?")
 
+
     def __del__(self):
         """ Disable the laser upon quitting, and close the GPIO access.
         """
@@ -49,7 +51,8 @@ class HardwareManager(object):
         self.mots_en(0)
         hd.gpio_close()
 
-################### SETTINGS INTERFACE FUNCTIONS #####################
+
+    ################### SETTINGS INTERFACE FUNCTIONS #####################
 
     def set_las_mask(self, img, scale):
         """ Set laser bit mask to an image, stretched to scale
@@ -62,7 +65,7 @@ class HardwareManager(object):
         """
         self.las_mask = np.array(img)
         # Workaround for numpy not liking "1" mode images
-        #self.las_mask = np.array(list(img.getdata())).reshape(img.size)
+        # self.las_mask = np.array(list(img.getdata())).reshape(img.size)
         self.las_dpi = scale
 
 
@@ -90,7 +93,7 @@ class HardwareManager(object):
         self.travel_spd = travel_spd if travel_spd != 0 else self.travel_spd
 
 
-#################### HW INTERFACE FUNCTIONS ########################
+    #################### HW INTERFACE FUNCTIONS ########################
 
     def home_xy(self):
         """ Initialize laser position by moving to endstop min position (0,0).

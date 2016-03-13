@@ -3,8 +3,7 @@ HManHelper.pyx
 A collection of Cython accelerated functions for use by the HardwareManager
 class. Primarily for the laser control algorithm.
 """
-
-__author__ = 'kakit'
+from __future__ import division
 
 cimport hardwareDriver as hd
 cimport numpy as np
@@ -71,7 +70,7 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     las_list = _gen_las_list(hman, step_list, setting=las_setting)
     time_list = _gen_time_list(hman, las_list)
 
-    # TODO break up command into multiple cuts so OS can schedule interrupts
+    # TODO break up command into multiple cuts so OS can schedule interrupts?
     # Move laser head, with precise timings
     retval = hd.move_laser(step_list, las_list, time_list)
     if retval != 0:

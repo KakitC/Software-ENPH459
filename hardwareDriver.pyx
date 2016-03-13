@@ -87,7 +87,7 @@ cdef extern from "bcm2835.h":
 cdef int USEC_PER_SEC = 1000000
 
 
-############# Bind pins to names #############
+############# PIN DEFINITIONS #############
 
 # Motor outputs
 # MOT_N is an array, with indices enums EN, STEP, DIR
@@ -100,16 +100,17 @@ cdef int MOT_A[3]
 MOT_A[EN]       = _RPI_V2_GPIO_P1_03
 MOT_A[STEP]     = _RPI_V2_GPIO_P1_05
 MOT_A[DIR]      = _RPI_V2_GPIO_P1_07
+# GND           = GPIO_09
 
 cdef int MOT_B[3]
 MOT_B[EN]       = _RPI_V2_GPIO_P1_08
 MOT_B[STEP]     = _RPI_V2_GPIO_P1_10
 MOT_B[DIR]      = _RPI_V2_GPIO_P1_12
+# GND           = GPIO_14
 
 # Laser output
-LAS             = _RPI_V2_GPIO_P1_11
+LAS             = _RPI_V2_GPIO_P1_26
 
-# TODO Check logic active hi/low for switch pins
 # All input switches
 cdef int XMIN       = 0
 cdef int XMAX       = 1
@@ -118,13 +119,15 @@ cdef int YMAX       = 3
 cdef int SAFE_FEET  = 4
 cdef int[:] list_of_sw_pins = array.array('i', (XMIN, XMAX, YMIN, YMAX,
                                                 SAFE_FEET))
-
+# Active low
 cdef int SWS[5]
 SWS[XMIN]   = _RPI_V2_GPIO_P1_13
 SWS[XMAX]   = _RPI_V2_GPIO_P1_15
-SWS[YMIN]   = _RPI_V2_GPIO_P1_16
-SWS[YMAX]   = _RPI_V2_GPIO_P1_18
-SWS[SAFE_FEET] = _RPI_V2_GPIO_P1_19
+# Vcc (3V3) = GPIO_17
+SWS[YMIN]   = _RPI_V2_GPIO_P1_21
+SWS[YMAX]   = _RPI_V2_GPIO_P1_19  # woops wires
+SWS[SAFE_FEET] = _RPI_V2_GPIO_P1_23  # woops active hi by accident
+# GND       = GPIO_25
 
 ############### External Interface Functions ##########################
 

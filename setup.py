@@ -2,7 +2,6 @@
 setup.py
 Build file for Cython extensions
 """
-__author__ = 'kakit'
 
 from distutils.core import setup
 from distutils.extension import Extension
