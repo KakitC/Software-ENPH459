@@ -307,7 +307,7 @@ cdef int move_laser(step_list, las_list, time_list):
 
         #Check switches, quit if triggered
         if retval:
-            print "Switches triggered: " + bin(retval)
+            # print "Switches triggered: " + bin(retval)
             break
 
         # # Diagnostic
@@ -363,10 +363,6 @@ cdef int read_switches_fast():
     :rtype: int
     """
     cdef int retval = 0
-
-    # TODO DISABLES SWITCH CHECKING FOR DEBUGGING, REMOVE THIS
-    # DISABLE SWITCH CHECKING EVER
-    return retval
 
     for pin in list_of_sw_pins:
         retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin

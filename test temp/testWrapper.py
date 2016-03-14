@@ -17,3 +17,7 @@ else:
     os.nice(-20)
 
 
+import cythonSandbox as cs
+cs.testfun()
+print cs.d
+print cs.x

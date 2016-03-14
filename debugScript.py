@@ -33,7 +33,7 @@ try:
     #     gman.G0(0, 100)
 
     while True:
-        print bin(gman.read_switches())
+        print bin(gman.read_sws())
         time.sleep(.05)
 
 except Exception:

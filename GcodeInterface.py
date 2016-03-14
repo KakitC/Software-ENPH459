@@ -469,4 +469,4 @@ class GcodeInterface(HardwareManager):
         :rtype: int
         """
 
-        return self.read_switches() & 0xf
+        return self.read_sws() & 0xf

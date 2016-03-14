@@ -12,15 +12,20 @@ from cpython cimport array
 #     print a.data.as_ints[i]
 #     print b.data.as_ints[i]
 
-cdef int[:] list = array.array('i', range(5))
-print len(list)
-cdef int TEST[5]
-#cdef int BUTTS[len(list)]
-for i in list:
-    TEST[i] = i*3
-#    BUTTS[i] = i*2
-
 cdef testfun():
     i = 5
     i += 1
     print i
+
+cdef int a = 5
+cdef int b = 5
+
+cdef enum:
+    x, y, z
+
+cdef enum:
+    d = 5
+    e = 6
+    f = 7
+
+print d

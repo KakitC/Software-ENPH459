@@ -38,7 +38,7 @@ class HardwareManager(object):
 
         # Vals on init
         self.homed = False
-        self.motors_enabled = False
+        self.mots_enabled = False
         self.x, self.y = 0.0, 0.0
         if hd.gpio_init() != 0:
             raise IOError("GPIO not initialized correctly; Do you have root?")
@@ -97,47 +97,12 @@ class HardwareManager(object):
 
     def home_xy(self):
         """ Initialize laser position by moving to endstop min position (0,0).
+
+        This is a wrapper for the HManHelper function.
+
         :return: 0 if successful, -1 if an error occured
         """
-        if not self.motors_enabled:
-            self.mots_en(1)
-
-        self.set_spd(travel_spd=100)
-
-        # Move XY to -bedmax, until an switch is triggered
-        # If it's safety feet, stop
-        # If it's either, move it back out (ignoring endstops here)
-        x_flag, y_flag = 1, 1
-
-        while (not x_flag) and (not y_flag):
-            status = self.laser_cut(-x_flag * hd.XMAX, -y_flag * hd.YMAX,
-                                    "blank")
-            if status == 0 or (status & (0x1 << hd.SAFE_FEET)):
-                # If no endstops triggered after the move or safety is engaged
-                return -1
-            elif status & (0x1 << hd.YMAX + 0x1 << hd.XMAX):
-                # TODO account for if XMAX/YMAX switches are triggered?
-                return -1
-
-            # If hit minstop, use while to back away and override switch
-            # TODO Test how repeatable this is
-            if status & (0x1 << hd.YMIN):
-                self.set_spd(travel_spd=3)
-                while self.laser_cut(0, 1, "blank") != 0:
-                    pass
-                self.set_spd(travel_spd=100)
-                y_flag = 0
-            if status & (0x1 << hd.XMIN):
-                self.set_spd(travel_spd=3)
-                while self.laser_cut(1, 0, "blank") != 0:
-                    pass
-                self.set_spd(travel_spd=100)
-                x_flag = 0
-
-        self.x, self.y = 0, 0
-        self.homed = True
-
-        return 0
+        return HMH.home_xy(self)
 
 
     def las_test(self, time):
@@ -153,7 +118,7 @@ class HardwareManager(object):
         hd.las_pulse(time)
 
 
-    def read_switches(self):
+    def read_sws(self):
         """ Read values of XY endstop switches and safety feet.
 
         This is a wrapper for a hardwareDriver function.
@@ -169,7 +134,7 @@ class HardwareManager(object):
     def mots_en(self, en):
         """ Enable or disable stepper motors.
 
-        This is a wrapper for a hardwareDriver function.
+        This is mostly a wrapper for a hardwareDriver function.
 
         :param en: 1 to enable, 0 to disable
         :type: bint (bool)
@@ -178,10 +143,10 @@ class HardwareManager(object):
 
         if en:
             hd.motor_enable()
-            self.motors_enabled = True
+            self.mots_enabled = True
         else:
             hd.motor_disable()
-            self.motors_enabled = False
+            self.mots_enabled = False
             self.homed = False
 
 
@@ -189,7 +154,7 @@ class HardwareManager(object):
         """ Perform a single straight-line motion of the laser head
         while firing the laser according to the mask image.
 
-        This is a wrapper for the HManHelper function of the same name.
+        This is a wrapper for the HManHelper function.
 
         :param x_delta:
         :param y_delta:

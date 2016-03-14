@@ -44,7 +44,7 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # 6. cleanup, return
 
     # Check if hardware was initialized
-    if not hman.homed or not hman.motors_enabled:
+    if not hman.homed or not hman.mots_enabled:
         return -1
 
     # Moved cutting speed code to GcodeManager
@@ -74,20 +74,62 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # Move laser head, with precise timings
     retval = hd.move_laser(step_list, las_list, time_list)
     if retval != 0:
+        # TODO Track current position if interrupted by switch
         return retval
-    # TODO raise exceptions: end stop trigger, safety switch trigger
-    # TODO What levels of functions should raise exceptions or error codes?
-    # Currently using: low-level returns non-zero vals, high level raise
-
 
     # Update position tracking
-    # TODO track error in x and y delta and do something about it
-    # hman.x += 0.5*(a_delta + b_delta) / hman.step_cal
-    # hman.y += 0.5*(a_delta - b_delta) / hman.step_cal
-    hman.x += x_delta
-    hman.y += y_delta
+    hman.x += 0.5*(a_delta + b_delta) / hman.step_cal
+    hman.y += 0.5*(a_delta - b_delta) / hman.step_cal
+    # hman.x += x_delta
+    # hman.y += y_delta
 
     return 0
+
+
+cpdef home_xy(hman):
+    if not hman.mots_enabled:
+        hman.mots_en(1)
+
+    hman.homed = True
+
+    hman.set_spd(travel_spd=100)
+
+    # Move XY to -bedmax, until an switch is triggered
+    # If it's safety feet, stop
+    # If it's either, move it back out (ignoring endstops here)
+    x_flag, y_flag = 1, 1
+
+    while x_flag or y_flag:
+        status = hman.laser_cut(-x_flag * hman.bed_xmax,
+                                -y_flag * hman.bed_ymax, "blank")
+        # print "status", status  # debug
+        if status == 0 or (status & (0x1 << hd.SAFE_FEET)):
+            # If no endstops triggered after the move or safety is engaged
+            hman.homed = False
+            return -1
+        elif status & (0x1 << hd.YMAX + 0x1 << hd.XMAX):
+            hman.homed = False
+            return -1
+
+        # If hit minstop, use while to back away and override switch
+        # TODO Test how repeatable this is
+        if status & (0x1 << hd.YMIN):
+            hman.set_spd(travel_spd=3)
+            while hman.laser_cut(0, 1, "blank") != 0:
+                pass
+            hman.set_spd(travel_spd=100)
+            y_flag = 0
+        if status & (0x1 << hd.XMIN):
+            hman.set_spd(travel_spd=3)
+            while hman.laser_cut(1, 0, "blank") != 0:
+                pass
+            hman.set_spd(travel_spd=100)
+            x_flag = 0
+
+    hman.x, hman.y = 0, 0
+
+    return 0
+
 
 ############################# INTERNAL FUNCTIONS ############################
 cdef _gen_step_list(int a_delta, int b_delta):
