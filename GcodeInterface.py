@@ -90,31 +90,47 @@ class GcodeInterface(HardwareManager):
             i = i[0:i.find("*")]  # strip checksum
 
             # Parse command into python code
-            line = i.split()
+            line = i.split()  # G-code line split list
             execstr = "self."
             for cmd in self.cmd_list:
-                cmd = cmd.split()
+                cmd = cmd.split()  # cmd is command string split list
 
-                if line[0] == cmd[0]:  # found it
+                if line[0] == cmd[0]:  # line command exists
                     execstr += cmd[0] + "("  # construct direct python call
                     cmd.pop(0)
                     line.pop(0)
 
-                    # TODO Parse Gcode parameters (X Y F S P)
+                    # Parse command arguements
+                    for param in line:  # param: "X123.45"
+                        if param[0] in cmd:  # If first char in cmd param list
+                            try:  # Check if it's a number
+                                float(param[1:-1])
+                            except ValueError:
+                                raise SyntaxError("G-code file parsing error: "
+                                                  "Command argument not a "
+                                                  "number at line" + str(j) +
+                                                  ": \n" + orig_line)
+                            execstr += ", " + param[0] + "=" + param[1:-1]
+                            cmd.remove(param[0])
+                        else:  # Command param not accepted in cmd args
+                            raise SyntaxError("G-code file parsing error: "
+                                               "Command parameter not accepted"
+                                              "at line" + str(j) + ": \n"
+                                              + orig_line)
 
                     execstr += ")"
                     execlist.append(execstr)
                     break  # done making command for this line
             else: # call not found in cmd_list
                 raise SyntaxError("G-code file parsing error: Command not found"
-                                  "at \n" + "line " + str(j) + ": " + orig_line)
+                                  "at line" + str(j) + ": \n" + orig_line)
         # Finished parsing file
         infile.close()
 
         # TODO should this be changed to execute line by line? Parses whole file
         for execstr in execlist:
             # TODO Debug: change back from print to exec
-            # TODO Catch exceptions
+            # TODO Catch exceptions and fail correctly
             # exec(execstr)
             print(execstr)
 
@@ -202,12 +218,12 @@ class GcodeInterface(HardwareManager):
         else:
             y_delta = 0
 
-        # TODO Remove las=blank for debugging after finishing laser bitmap input
-        # las_setting = "default" if self.las_on else "blank"
-        las_setting = "blank"
+        las_setting = "default" if self.las_on else "blank"
         retval = self.laser_cut(x_delta, y_delta, las_setting=las_setting)
-        if retval != 0:
+        if retval > 0:
             raise RuntimeError("G1 Switch was triggered: " + bin(retval))
+        elif retval < 0:
+            raise RuntimeError("G1 Command failed")
 
 
     def G20(self):

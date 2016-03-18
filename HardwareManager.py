@@ -47,7 +47,6 @@ class HardwareManager(object):
     def __del__(self):
         """ Disable the laser upon quitting, and close the GPIO access.
         """
-        # TODO check this works/ is good enough
         self.mots_en(0)
         hd.gpio_close()
 

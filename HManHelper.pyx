@@ -61,7 +61,6 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
     cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
 
-    # TODO Check against a 0 distance move for list errors
     if a_delta == 0 and b_delta == 0:  # this kind of works
         return 0
 
@@ -80,8 +79,6 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # Update position tracking
     hman.x += 0.5*(a_delta + b_delta) / hman.step_cal
     hman.y += 0.5*(a_delta - b_delta) / hman.step_cal
-    # hman.x += x_delta
-    # hman.y += y_delta
 
     return 0
 
@@ -114,15 +111,25 @@ cpdef home_xy(hman):
         # If hit minstop, use while to back away and override switch
         # TODO Test how repeatable this is
         if status & (0x1 << hd.YMIN):
+            # Back off, move in slowly, then back off again
             hman.set_spd(travel_spd=3)
-            while hman.laser_cut(0, 1, "blank") != 0:
+            while hman.laser_cut(0, 1, "blank") & (0x1 << hd.YMIN):
                 pass
+            hman.laser_cut(0,-1, "blank")  # TODO What if both endstops are hit?
+            while hman.laser_cut(0, 1, "blank") & (0x1 << hd.YMIN):
+                pass
+
             hman.set_spd(travel_spd=100)
             y_flag = 0
+
         if status & (0x1 << hd.XMIN):
             hman.set_spd(travel_spd=3)
-            while hman.laser_cut(1, 0, "blank") != 0:
+            while hman.laser_cut(1, 0, "blank") (0x1 << hd.XMIN):
                 pass
+            hman.laser_cut(-1,0, "blank")
+            while hman.laser_cut(1, 0, "blank") (0x1 << hd.XMIN):
+                pass
+
             hman.set_spd(travel_spd=100)
             x_flag = 0
 
@@ -234,8 +241,13 @@ cdef _gen_las_list(hman, step_list, setting="default"):
         x_px = int(x_now * hman.las_dpi)
         y_px = int(y_now * hman.las_dpi)
 
+        if x_px >= hman.las_mask.shape[0] or y_px >= hman.las_mask.shape[1]:
+            las_list.append(0)
+            continue
+
         las_list.append(1 if hman.las_mask[x_px][y_px] != 255 else 0)
         # las_list.append(hman.las_mask[x_px][y_px]) # 8b power settings
+        # TODO do 8 bit laser power settings and gamma curve
 
     return las_list
 
