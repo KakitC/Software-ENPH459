@@ -1,9 +1,8 @@
 """
 HManHelper.pyx
-A collection of Cython accelerated functions for use by the HardwareManager
+A collection of Cython accelerated functions for use only by the HardwareManager
 class. Primarily for the laser control algorithm.
 """
-from __future__ import division
 
 cimport hardwareDriver as hd
 cimport numpy as np
@@ -103,8 +102,10 @@ cpdef home_xy(hman):
         if status == 0 or (status & (0x1 << hd.SAFE_FEET)):
             # If no endstops triggered after the move or safety is engaged
             hman.homed = False
+            hman.mots_en(0)
             return -1
         elif status & (0x1 << hd.YMAX + 0x1 << hd.XMAX):
+            hman.mots_en(0)
             hman.homed = False
             return -1
 
@@ -113,10 +114,11 @@ cpdef home_xy(hman):
         if status & (0x1 << hd.YMIN):
             # Back off, move in slowly, then back off again
             hman.set_spd(travel_spd=3)
-            while hman.laser_cut(0, 1, "blank") & (0x1 << hd.YMIN):
+            # TODO Change offset position from magic number to a variable
+            while hman.laser_cut(0, 2, "blank") & (0x1 << hd.YMIN):
                 pass
-            hman.laser_cut(0,-1, "blank")  # TODO What if both endstops are hit?
-            while hman.laser_cut(0, 1, "blank") & (0x1 << hd.YMIN):
+            hman.laser_cut(0, -hman.bed_ymax, "blank")  # TODO What if both endstops are hit?
+            while hman.laser_cut(0, 2, "blank") & (0x1 << hd.YMIN):
                 pass
 
             hman.set_spd(travel_spd=100)
@@ -124,10 +126,10 @@ cpdef home_xy(hman):
 
         if status & (0x1 << hd.XMIN):
             hman.set_spd(travel_spd=3)
-            while hman.laser_cut(1, 0, "blank") (0x1 << hd.XMIN):
+            while hman.laser_cut(2, 0, "blank") & (0x1 << hd.XMIN):
                 pass
-            hman.laser_cut(-1,0, "blank")
-            while hman.laser_cut(1, 0, "blank") (0x1 << hd.XMIN):
+            hman.laser_cut(-hman.bed_xmax, 0, "blank")
+            while hman.laser_cut(2, 0, "blank") & (0x1 << hd.XMIN):
                 pass
 
             hman.set_spd(travel_spd=100)
@@ -214,10 +216,10 @@ cdef _gen_las_list(hman, step_list, setting="default"):
         return [0 for i in range(len(step_list))]
     if setting == "dark":
         return [1 for i in range(len(step_list))]
-    else:
-        # TODO finish implementing this properly
-        print "gen_las_list not verified, not cutting"
-        return [0 for i in range(len(step_list))]
+    # else:
+    #     # TODO finish implementing this properly
+    #     print "gen_las_list not verified, not cutting"
+    #     return [0 for i in range(len(step_list))]
 
     cdef double x_now = hman.x
     cdef double y_now = hman.y
@@ -236,17 +238,16 @@ cdef _gen_las_list(hman, step_list, setting="default"):
         y_now += 0.5*(i[0] - i[1]) * hman.step_cal
 
         # Sets laser power to 0 if mask is 255 (blank = don't cut)
-        # TODO account for out-of-bounds errors
-        # should actually be
-        x_px = int(x_now * hman.las_dpi)
-        y_px = int(y_now * hman.las_dpi)
+        x_px = int(x_now * hman.las_dpmm)
+        y_px = int(y_now * hman.las_dpmm)
 
+        # TODO account for out-of-bounds errors
         if x_px >= hman.las_mask.shape[0] or y_px >= hman.las_mask.shape[1]:
             las_list.append(0)
             continue
 
         las_list.append(1 if hman.las_mask[x_px][y_px] != 255 else 0)
-        # las_list.append(hman.las_mask[x_px][y_px]) # 8b power settings
+        # las_list.append(255-hman.las_mask[x_px][y_px]) # 8b power settings
         # TODO do 8 bit laser power settings and gamma curve
 
     return las_list

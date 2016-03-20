@@ -26,6 +26,7 @@ else:
 import HardwareManager as HM
 import hardwareDriver as hd
 import GcodeInterface as GI
+import ipsRaster as ipsR
 
 
 gman = GI.GcodeInterface()

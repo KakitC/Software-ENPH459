@@ -32,7 +32,7 @@ class HardwareManager(object):
         self.cut_spd = 1  # mm/s
         self.travel_spd = 30  # mm/s
         self.las_mask = np.array([[255]])  # 255: White - PIL Image 0-255 vals
-        self.las_dpi = 0.00000001  # ~0 DPI, 1 pixel for whole space
+        self.las_dpmm = 0.00000001  # ~0 Dots Per mm, 1 pixel for whole space
         self.bed_xmax = 200  #
         self.bed_ymax = 250
 
@@ -58,14 +58,14 @@ class HardwareManager(object):
 
         :param img: Laser bitmask, 0
         :type: PIL.Image.Image
-        :param scale: DPI of the image
+        :param scale: Dots-Per-mm of the image
         :type: double
         :return: void
         """
         self.las_mask = np.array(img)
         # Workaround for numpy not liking "1" mode images
         # self.las_mask = np.array(list(img.getdata())).reshape(img.size)
-        self.las_dpi = scale
+        self.las_dpmm = scale
 
 
     def set_step_cal(self, step_cal):

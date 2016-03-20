@@ -147,6 +147,8 @@ cpdef int gpio_init():
         bcm2835_gpio_fsel(MOT_A[outpin], _GPIO_FSEL_OUTP)
         bcm2835_gpio_fsel(MOT_B[outpin], _GPIO_FSEL_OUTP)
 
+    bcm2835_gpio_fsel(LAS, _GPIO_FSEL_OUTP)
+
     # Inputs
     for inpin in list_of_sw_pins:
         bcm2835_gpio_fsel(SWS[inpin], _GPIO_FSEL_INPT)
@@ -220,8 +222,14 @@ cpdef void las_pulse(double time):
     :return: void
     """
 
+    # TODO check safety switches while firing
+
     bcm2835_gpio_set(LAS)
-    time.sleep(time)
+    cdef timeval start, end
+    gettimeofday(&start, NULL)
+    gettimeofday(&end, NULL)
+    while time_diff(start, end) < time * USEC_PER_SEC:
+        gettimeofday(&end, NULL)
     bcm2835_gpio_clr(LAS)
 
 

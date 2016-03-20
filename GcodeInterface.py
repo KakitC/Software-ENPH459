@@ -7,7 +7,6 @@ G-code commands from reprap.org/wiki/G-code
 and https://en.wikipedia.org/wiki/G-code
 """
 
-from __future__ import division
 import re
 from HardwareManager import HardwareManager
 
@@ -72,7 +71,7 @@ class GcodeInterface(HardwareManager):
             raise
 
         lines = infile.readlines()
-        execlist =[]
+        execlist = []
 
         # Gcode parsing rules:
         # Ex: N3 G1 X10.3 Y23.4 *34 ; comment
@@ -81,21 +80,29 @@ class GcodeInterface(HardwareManager):
         # Strip any line number (N) fields
         # Strip checksums
         # Parse actual command
-        for i, j in lines, range(len(lines)):
+        for j, i in enumerate(lines):
             orig_line = i
             i = i.upper()
             i = i[0:i.find(";")]  # strip comments
-            i = i.strip()
             i = re.sub(r"N[0-9]*\s", "", i, 1)  # strip line numbers
-            i = i[0:i.find("*")]  # strip checksum
+            try:  # strip checksum [*33]
+                ind = i.index("*")
+                i = i[0:ind]
+            except ValueError:
+                pass
+            i = i.strip()
+
 
             # Parse command into python code
             line = i.split()  # G-code line split list
+            if not line:  # No commands in this line
+                continue
+
             execstr = "self."
             for cmd in self.cmd_list:
                 cmd = cmd.split()  # cmd is command string split list
 
-                if line[0] == cmd[0]:  # line command exists
+                if line[0] == cmd[0]:  # line command is in cmd_list
                     execstr += cmd[0] + "("  # construct direct python call
                     cmd.pop(0)
                     line.pop(0)
@@ -104,35 +111,41 @@ class GcodeInterface(HardwareManager):
                     for param in line:  # param: "X123.45"
                         if param[0] in cmd:  # If first char in cmd param list
                             try:  # Check if it's a number
-                                float(param[1:-1])
+                                float(param[1:])
                             except ValueError:
                                 raise SyntaxError("G-code file parsing error: "
-                                                  "Command argument not a "
-                                                  "number at line" + str(j) +
+                                                  "Command argument not a"
+                                                  " number at line" + str(j) +
                                                   ": \n" + orig_line)
-                            execstr += ", " + param[0] + "=" + param[1:-1]
+                            if execstr[-1] != "(":
+                                execstr += ", "
+                            execstr += param[0] + "=" + param[1:]
                             cmd.remove(param[0])
                         else:  # Command param not accepted in cmd args
                             raise SyntaxError("G-code file parsing error: "
-                                               "Command parameter not accepted"
-                                              "at line" + str(j) + ": \n"
+                                              "Command parameter not accepted"
+                                              " at line " + str(j) + ": \n"
                                               + orig_line)
 
                     execstr += ")"
                     execlist.append(execstr)
                     break  # done making command for this line
-            else: # call not found in cmd_list
+            else:  # call not found in cmd_list
                 raise SyntaxError("G-code file parsing error: Command not found"
-                                  "at line" + str(j) + ": \n" + orig_line)
+                                  " at line " + str(j) + ": \n" + orig_line)
         # Finished parsing file
         infile.close()
 
         # TODO should this be changed to execute line by line? Parses whole file
         for execstr in execlist:
-            # TODO Debug: change back from print to exec
             # TODO Catch exceptions and fail correctly
-            # exec(execstr)
-            print(execstr)
+            try:
+                # debug
+                print(execstr)
+                exec(execstr)
+            except RuntimeError:
+                self.M1()
+                raise
 
 
 
@@ -147,7 +160,7 @@ class GcodeInterface(HardwareManager):
         G92: Set Position
     """
 
-    def G0(self, x=None, y=None, f=None):
+    def G0(self, X=None, Y=None, F=None):
         """ G0: Rapid move
 
         Does not fire laser, otherwise identical to G1
@@ -157,18 +170,18 @@ class GcodeInterface(HardwareManager):
         :param f: New feedrate in mm/min (Optional)
         :return: void
         """
-        if f is not None:
-            self.set_spd(travel_spd=f / 60.)
+        if F is not None:
+            self.set_spd(travel_spd=F / 60.)
 
-        if x is not None:
-            x_delta = x
+        if X is not None:
+            x_delta = X
             if not self.relative:
                 x_delta -= self.x
         else:
             x_delta = 0
 
-        if y is not None:
-            y_delta = y
+        if Y is not None:
+            y_delta = Y
             if not self.relative:
                 y_delta -= self.y
         else:
@@ -181,7 +194,7 @@ class GcodeInterface(HardwareManager):
             raise RuntimeError("G0 Laser not homed")
 
 
-    def G1(self, x=None, y=None, f=None):
+    def G1(self, X=None, Y=None, F=None):
         """ G1: Controlled Move
 
         If X or Y are not given, the laser will not move on that axis.
@@ -198,21 +211,21 @@ class GcodeInterface(HardwareManager):
         :param f: New feedrate in mm/min (Optional)
         :return: void
         """
-        if f is not None:
+        if F is not None:
             if self.las_on:
-                self.set_spd(cut_spd=f / 60.)
+                self.set_spd(cut_spd=F / 60.)
             else:
-                self.set_spd(travel_spd=f / 60.)
+                self.set_spd(travel_spd=F / 60.)
 
-        if x is not None:
-            x_delta = x
+        if X is not None:
+            x_delta = X
             if not self.relative:
                 x_delta -= self.x
         else:
             x_delta = 0
 
-        if y is not None:
-            y_delta = y
+        if Y is not None:
+            y_delta = Y
             if not self.relative:
                 y_delta -= self.y
         else:
@@ -271,7 +284,7 @@ class GcodeInterface(HardwareManager):
         self.relative = True
 
 
-    def G92(self, x=0, y=0):
+    def G92(self, X=0, Y=0):
         """ G92: Set Position
 
         Sets the current position to the values given without moving.
@@ -283,8 +296,13 @@ class GcodeInterface(HardwareManager):
         :type: double
         :return: void
         """
+        try:
+            float(X)
+            float(Y)
+        except ValueError:
+            raise RuntimeError("G92: Position parameter not a number:" + str(X))
 
-        self.x, self.y = x, y
+        self.x, self.y = X, Y
 
 ####################### M Code Functions ################################
     """ M0: Unconditional Stop
@@ -302,19 +320,19 @@ class GcodeInterface(HardwareManager):
         M115: Get Firmware Version and Capabilities
         M119: Get Endstop Status
     """
-        # # NOT IMPLEMENTED
-        # M203: Set maximum feedrate
-        # M206 Marlin, Sprinter, Smoothie, RepRapFirmware - Set home offset
-        # M208: Set axis max travel
-        # M240: Trigger camera
-        # M300: Play beep sound
-        # M500: Store parameters in EEPROM
-        # M501: Read parameters from EEPROM
-        # M502: Revert to the default "factory settings."
-        # M503: Print settings
-        # M550: Set Name
-        # M552: Set IP address
-        # M553: Set Netmask
+    # # NOT IMPLEMENTED
+    # M203: Set maximum feedrate
+    # M206 Marlin, Sprinter, Smoothie, RepRapFirmware - Set home offset
+    # M208: Set axis max travel
+    # M240: Trigger camera
+    # M300: Play beep sound
+    # M500: Store parameters in EEPROM
+    # M501: Read parameters from EEPROM
+    # M502: Revert to the default "factory settings."
+    # M503: Print settings
+    # M550: Set Name
+    # M552: Set IP address
+    # M553: Set Netmask
 
 
     def M0(self):
@@ -343,7 +361,7 @@ class GcodeInterface(HardwareManager):
         self.mots_en(0)
 
 
-    def M3(self, s=None):
+    def M3(self, S=None):
         """ M3: Spindle On (Laser On)
 
         Adapted from standard G-code M3: Spindle On at S(RPM).
@@ -355,7 +373,7 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        self.las_on = True if s else False
+        self.las_on = True if S else False
 
 
     def M5(self):
@@ -387,7 +405,7 @@ class GcodeInterface(HardwareManager):
         self.mots_en(0)
 
 
-    def M42(self, p=None, s=None):
+    def M42(self, P=None, S=None):
         """ M42: Switch I/O Pin
 
         NOT IMPLEMENTED
@@ -402,7 +420,7 @@ class GcodeInterface(HardwareManager):
         raise NotImplementedError("M42 Switch I/O Pin not implemented")
 
 
-    def M72(self, p=None):
+    def M72(self, P=None):
         """ M72: Play a Tone or Song
 
         NOT IMPLEMENTED
@@ -415,7 +433,7 @@ class GcodeInterface(HardwareManager):
         raise NotImplementedError("M72 Play a Tone or Song not implemented")
 
 
-    def M92(self, x=None, y=None):
+    def M92(self, X=None, Y=None):
         """ M92: Set Axis Steps Per Unit
 
         Sets step_cal to X or Y, or just X if both are give
@@ -427,13 +445,13 @@ class GcodeInterface(HardwareManager):
         :return: void
         """
 
-        if x is not None:
-            self.step_cal = x
-        elif y is not None:
-            self.step_cal = y
+        if X is not None:
+            self.step_cal = X
+        elif Y is not None:
+            self.step_cal = Y
 
 
-    def M106(self, p=None, s=None):
+    def M106(self, P=None, S=None):
         """ M106: Fan On
 
         NOT IMPLEMENTED
