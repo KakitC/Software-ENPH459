@@ -83,18 +83,20 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
 
 
 cpdef home_xy(hman):
+    home_spd = 100  # mm/s
+    align_spd = 3  # mm/s
+    offset = 2  # mm from limit switches
+
+    # Hardware config
     if not hman.mots_enabled:
         hman.mots_en(1)
-
-    hman.homed = True
-
     hman.set_spd(travel_spd=100)
+    hman.homed = True
 
     # Move XY to -bedmax, until an switch is triggered
     # If it's safety feet, stop
     # If it's either, move it back out (ignoring endstops here)
     x_flag, y_flag = 1, 1
-
     while x_flag or y_flag:
         status = hman.laser_cut(-x_flag * hman.bed_xmax,
                                 -y_flag * hman.bed_ymax, "blank")
@@ -109,30 +111,34 @@ cpdef home_xy(hman):
             hman.homed = False
             return -1
 
-        # If hit minstop, use while to back away and override switch
+        # If hit minstop, use a while to back away overriding switch interrupt
         # TODO Test how repeatable this is
+        # TODO What if both endstops are hit?
         if status & (0x1 << hd.YMIN):
             # Back off, move in slowly, then back off again
-            hman.set_spd(travel_spd=3)
-            # TODO Change offset position from magic number to a variable
-            while hman.laser_cut(0, 2, "blank") & (0x1 << hd.YMIN):
-                pass
-            hman.laser_cut(0, -hman.bed_ymax, "blank")  # TODO What if both endstops are hit?
-            while hman.laser_cut(0, 2, "blank") & (0x1 << hd.YMIN):
-                pass
+            hman.set_spd(travel_spd=align_spd)
+            while hman.laser_cut(0, offset, "blank") & (0x1 << hd.YMIN):
+                hd.delay_micros(hd.USEC_PER_SEC /
+                                (hman.step_cal * hman.travel_spd))
+            hman.laser_cut(0, -hman.bed_ymax, "blank")
+            while hman.laser_cut(0, offset, "blank") & (0x1 << hd.YMIN):
+                hd.delay_micros(hd.USEC_PER_SEC /
+                                (hman.step_cal * hman.travel_spd))
 
-            hman.set_spd(travel_spd=100)
+            hman.set_spd(travel_spd=home_spd)
             y_flag = 0
 
         if status & (0x1 << hd.XMIN):
-            hman.set_spd(travel_spd=3)
-            while hman.laser_cut(2, 0, "blank") & (0x1 << hd.XMIN):
-                pass
+            hman.set_spd(travel_spd=align_spd)
+            while hman.laser_cut(offset, 0, "blank") & (0x1 << hd.XMIN):
+                hd.delay_micros(hd.USEC_PER_SEC /
+                                (hman.step_cal * hman.travel_spd))
             hman.laser_cut(-hman.bed_xmax, 0, "blank")
-            while hman.laser_cut(2, 0, "blank") & (0x1 << hd.XMIN):
-                pass
+            while hman.laser_cut(offset, 0, "blank") & (0x1 << hd.XMIN):
+                hd.delay_micros(hd.USEC_PER_SEC /
+                                (hman.step_cal * hman.travel_spd))
 
-            hman.set_spd(travel_spd=100)
+            hman.set_spd(travel_spd=home_spd)
             x_flag = 0
 
     hman.x, hman.y = 0, 0

@@ -215,14 +215,13 @@ cpdef void las_pulse(double time):
     """ Turn on the laser output for a given time, then turn off.
 
     For testing laser functionality. Don't have a function allowing raw access
-    to laser GPIO, meaning accidentally leaving it on indefinitely.
+    to laser GPIO, meaning accidentally leaving it on indefinitely. Disables
+    laser if safety feet are triggered.
 
     :param time: Pulse length in seconds
     :type: int
     :return: void
     """
-
-    # TODO check safety switches while firing
 
     bcm2835_gpio_set(LAS)
     cdef timeval start, end
@@ -230,6 +229,8 @@ cpdef void las_pulse(double time):
     gettimeofday(&end, NULL)
     while time_diff(start, end) < time * USEC_PER_SEC:
         gettimeofday(&end, NULL)
+        if read_switches_fast() & (0x1 << SAFE_FEET):
+            break
     bcm2835_gpio_clr(LAS)
 
 
@@ -248,6 +249,30 @@ cpdef int read_switches():
         retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
 
     return retval
+
+
+cpdef void delay_micros(long us):
+    """ Wait for X microseconds somewhat precisely.
+
+    :param us: Time in microseconds to wait
+    :return: void
+    """
+
+    # bcm2835_delayMicroseconds(us)  # don't trust this too much
+    cdef timeval start, end
+    gettimeofday(&start, NULL)
+    gettimeofday(&end, NULL)
+    while time_diff(start, end) < us:
+        gettimeofday(&end, NULL)
+
+
+cpdef void delay_millis(long ms):
+    """ Wait for X milliseconds.
+    :param ms: Time in millisecodns to wait
+    :return: void
+    """
+
+    bcm2835_delay(ms)  # whatever timing in ms range
 
 
 cdef int move_laser(step_list, las_list, time_list):

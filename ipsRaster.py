@@ -13,7 +13,7 @@ from PIL import Image, ImageFilter, ImageStat, ImageEnhance, ImageChops
 import numpy as np
 
 
-def raster_dither(in_file, scaling=10, pad=(0, 0)):
+def raster_dither(in_file, scaling=10, pad=(0, 0), blackwhite=False):
     """ Convert an image to dithered greyscale, and pad it to the position
     given to ready for sending to the laser as a power/speed bitmap.
 
@@ -25,6 +25,9 @@ def raster_dither(in_file, scaling=10, pad=(0, 0)):
     :type: double
     :param pad: Set datum position of top-left of image engraving in mm
     :type: (double, double)
+    :param blackwhite: Set as True if image is already black and white for
+                       engraving
+    :type: bool
     :return: Image converted to raster bitmap
     """
     # Get image, convert
@@ -34,22 +37,24 @@ def raster_dither(in_file, scaling=10, pad=(0, 0)):
 
     # Main processing blocks, filters
     with Image.open(in_file) as pic:
-        pic = pic.convert(mode="L")  # To greyscale
+        if not blackwhite:
+            pic = pic.convert(mode="L")  # To greyscale
 
-        edges = pic.filter(ImageFilter.CONTOUR)  # Pick out edges
-        edges = edges.filter(ImageFilter.SMOOTH_MORE)  # Smooth noise
+            edges = pic.filter(ImageFilter.CONTOUR)  # Pick out edges
+            edges = edges.filter(ImageFilter.SMOOTH_MORE)  # Smooth edge noise
 
-        pic = pic.filter(ImageFilter.SMOOTH_MORE)  # Smooth noise in original
+            pic = pic.filter(ImageFilter.SMOOTH_MORE)  # Smooth source noise
 
-        # Brightness leveling for dark images
-        brightness = ImageStat.Stat(pic).mean
-        if brightness[0] < 100:
-            pic = ImageEnhance.Brightness(pic).enhance(1.75)
-        elif brightness[0] < 120:
-            pic = ImageEnhance.Brightness(pic).enhance(1.2)
+            # Brightness leveling for dark images
+            # TODO Make a proper gamma curve thing
+            brightness = ImageStat.Stat(pic).mean
+            if brightness[0] < 100:
+                pic = ImageEnhance.Brightness(pic).enhance(1.75)
+            elif brightness[0] < 120:
+                pic = ImageEnhance.Brightness(pic).enhance(1.2)
 
-        pic = ImageChops.multiply(pic, edges)  # Recombine edges for crispness
-        pic = pic.convert("1")  # Uses Floyd-Steinberg dithering by default
+            pic = ImageChops.multiply(pic, edges)  # Recombine edges
+            pic = pic.convert("1")  # Uses Floyd-Steinberg dithering by default
 
         # Pad out from corner
         if pad == (0, 0):
@@ -101,12 +106,17 @@ def gen_gcode(filename, pic, scaling, travel_feed, cut_feed):
         cmds = []
         if all(row) == 255:  # If no pixels to etch, skip this row
             continue
-        # Move to start of row
-        cmds.append("\nG0 X0 Y{} F{}".format(float(row_i) / scaling,
-                                             travel_feed))
-        last_col_i = np.where(row < 255)[0][-1]  # Only go to last non-zero column
+        # Move to start of row/first non-zero column
+        first_col_i = np.where(row < 255)[0][0]
+        first_col_i -= 1 if first_col_i > 0 else 0
+        cmds.append("\nG0 X{} Y{} F{}".format(float(first_col_i) / scaling,
+                                              float(row_i) / scaling,
+                                              travel_feed))
+        # Only go to last non-zero column
+        last_col_i = np.where(row < 255)[0][-1]
         cmds.append("\nG1 X{} Y{} F{}".format(float(last_col_i) / scaling,
-                                              float(row_i) / scaling, cut_feed))
+                                              float(row_i) / scaling,
+                                              cut_feed))
         # TODO Issue: Horizontal banding if delta_y is not larger than step size
         # TODO Truncate columns/rows for x > hman.bed_xmax
 

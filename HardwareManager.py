@@ -104,7 +104,7 @@ class HardwareManager(object):
         return HMH.home_xy(self)
 
 
-    def las_test(self, time):
+    def las_pulse(self, time):
         """ Pulse laser output for testing purposes.
 
         This is a wrapper for a hardwareDriver function.
