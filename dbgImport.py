@@ -27,6 +27,7 @@ import HardwareManager as HM
 import hardwareDriver as hd
 import GcodeInterface as GI
 import ipsRaster as ipsR
+import scanBlock as scn
 
 
 gman = GI.GcodeInterface()

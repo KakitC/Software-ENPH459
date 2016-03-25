@@ -33,8 +33,8 @@ class HardwareManager(object):
         self.travel_spd = 30  # mm/s
         self.las_mask = np.array([[255]])  # 255: White - PIL Image 0-255 vals
         self.las_dpmm = 0.00000001  # ~0 Dots Per mm, 1 pixel for whole space
-        self.bed_xmax = 200  #
-        self.bed_ymax = 250
+        self.bed_xmax = 250  # mm
+        self.bed_ymax = 280  # mm
 
         # Vals on init
         self.homed = False
@@ -90,6 +90,17 @@ class HardwareManager(object):
 
         self.cut_spd = cut_spd if cut_spd != 0 else self.cut_spd
         self.travel_spd = travel_spd if travel_spd != 0 else self.travel_spd
+
+    def set_limits(self, x, y):
+        """ Set software cutting bed size Xmax and Ymax limits.
+        :param x: Bed Xmax in mm
+        :type: double
+        :param y: Bed Ymax in mm
+        :type: double
+        :return: void
+        """
+        self.bed_xmax = x
+        self.bed_ymax = y
 
 
     #################### HW INTERFACE FUNCTIONS ########################

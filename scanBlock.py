@@ -28,14 +28,13 @@ def scan_bed(gman, area):
     """
 
     # Calibration parameters
-    cam_fov_x, cam_fov_y = 64, 48  # Undistorted camera FoV in mm
+    cam_fov_x, cam_fov_y = 32, 24  # Undistorted camera FoV in mm
     cam_feed = 100 * 60  # image taking feedrate (mm/min)
     resolution = (640, 480)
     # shutter_speed =
     # iso =
     # awb_mode = "off"
 
-    outfile = "output/bed_scan.jpg"
 
     try:
         xmin, ymin = 0, 0
@@ -54,7 +53,7 @@ def scan_bed(gman, area):
     with picam.PiCamera() as cam:
         # Init
         cam.resolution = resolution
-        cam.start_preview(alpha=128)  # debug
+        # cam.start_preview(alpha=128)  # debug
         stream = io.BytesIO()
 
         if not gman.homed:
@@ -70,7 +69,8 @@ def scan_bed(gman, area):
                 stream.seek(0)
                 pics_arr[j].append(Image.open(stream).convert(mode='L'))
 
-    return _scan_stitch(pics_arr, cam_fov_x, cam_fov_y)
+    pic = _scan_stitch(pics_arr, cam_fov_x, cam_fov_y)
+    return pic
 
 
 def _scan_stitch(pics_arr, cam_fov_x, cam_fov_y):

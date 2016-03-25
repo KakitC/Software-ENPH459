@@ -57,10 +57,10 @@ def raster_dither(in_file, scaling=10, pad=(0, 0), blackwhite=False):
             pic = pic.convert("1")  # Uses Floyd-Steinberg dithering by default
 
         # Pad out from corner
-        if pad == (0, 0):
+        if pad != (0, 0):
             big_pic = Image.new("1", tuple([pic.size[i] + int(pad[i]*scaling)
-                                            for i in [0,1]]), color=1)
-            big_pic.paste(pic, pad)
+                                            for i in [0,1]]), color="white")
+            big_pic.paste(pic, tuple([_*scaling for _ in pad]))
             pic = big_pic
 
         pic = pic.convert("L")  # Convert back to 8bit greyscale (for laser)
@@ -104,7 +104,7 @@ def gen_gcode(filename, pic, scaling, travel_feed, cut_feed):
 
     for row_i, row in enumerate(pix_arr):
         cmds = []
-        if all(row) == 255:  # If no pixels to etch, skip this row
+        if len(np.where(row < 255)[0]) == 0:  # If no pixels to etch, skip this row
             continue
         # Move to start of row/first non-zero column
         first_col_i = np.where(row < 255)[0][0]

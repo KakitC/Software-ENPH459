@@ -46,23 +46,16 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     if not hman.homed or not hman.mots_enabled:
         return -1
 
-    # Moved cutting speed code to GcodeManager
-    # # Store speed values as last used
-    # if cut_spd > 0:
-    #     hman.cut_spd = cut_spd
-    # if travel_spd > 0:
-    #     hman.travel_spd = travel_spd
-
     # Check command against soft XY limits
 	# TODO debug
-    if hman.x + x_delta > hman.bed_xmax:
-        x_delta = hman.bed_xmax - hman.x
-    elif hman.x + x_delta < 0:
-        x_delta = -hman.x
-    if hman.y + y_delta > hman.bed_ymax:
-        y_delta = hman.bed_ymax - hman.y
-    elif hman.y + y_delta < 0:
-        y_delta = -hman.y
+    # if hman.x + x_delta > hman.bed_xmax:
+     #    x_delta = hman.bed_xmax - hman.x
+    # elif hman.x + x_delta < 0:
+     #    x_delta = -hman.x
+    # if hman.y + y_delta > hman.bed_ymax:
+     #    y_delta = hman.bed_ymax - hman.y
+    # elif hman.y + y_delta < 0:
+     #    y_delta = -hman.y
 
     # TODO Check speed against max toggle rate (~<1kHz) and limit
     # TODO Implement separate X/Y or A/B step_cal values
@@ -100,7 +93,7 @@ cpdef home_xy(hman):
     # Hardware config
     if not hman.mots_enabled:
         hman.mots_en(1)
-    hman.set_spd(travel_spd=100)
+    hman.set_spd(travel_spd=home_spd)
     hman.homed = True
 
     # Move XY to -bedmax, until an switch is triggered
