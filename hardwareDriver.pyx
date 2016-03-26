@@ -92,8 +92,8 @@ cdef int USEC_PER_SEC = 1000000
 # Motor outputs
 # MOT_N is an array, with indices enums EN, STEP, DIR
 cdef int EN     = 0  # ACTIVE LOW
-cdef int STEP   = 1
-cdef int DIR    = 2
+cdef int STEP   = 1  # ACTIVE HIGH
+cdef int DIR    = 2  # ACTIVE HIGH
 cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
 
 cdef int MOT_A[3]
@@ -321,11 +321,11 @@ cdef int move_laser(step_list, las_list, time_list):
         delta = 0
 
         # Set laser
-        bcm2835_gpio_write(LAS, las_arr[i])
+        # TODO debug: laser_gen_lists not validated yet, don't fire
+        # bcm2835_gpio_write(LAS, las_arr[i])
         # bcm2835_gpio_write(LAS, 1 if las_arr[i] else 0)  # 8b power settings
 
         # Move steppers
-        # MOT A DIR positive is _, MOT B DIR positive is _
         bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
         bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
 

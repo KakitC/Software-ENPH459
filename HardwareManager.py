@@ -4,8 +4,6 @@ The HardwareManager object class, for maintaining laser cutter state and
 control and setting interfaces
 """
 
-from __future__ import division
-
 import numpy as np
 
 import HManHelper as HMH
@@ -35,6 +33,7 @@ class HardwareManager(object):
         self.las_dpmm = 0.00000001  # ~0 Dots Per mm, 1 pixel for whole space
         self.bed_xmax = 250  # mm
         self.bed_ymax = 280  # mm
+        self.skew = 0  # degrees
 
         # Vals on init
         self.homed = False
@@ -52,6 +51,20 @@ class HardwareManager(object):
 
 
     ################### SETTINGS INTERFACE FUNCTIONS #####################
+
+    # TODO debug set_settings
+    def set_settings(self, dic):
+        """ Set all properties in HardwareManager which exist from dictionary.
+        :param dic: Dictionary of properties
+        :type: dict
+        :return:
+        """
+        for x in dic:
+            try:
+                setattr(self, x, dic[x])
+            except AttributeError:
+                continue
+
 
     def set_las_mask(self, img, scale):
         """ Set laser bit mask to an image, stretched to scale
@@ -91,7 +104,8 @@ class HardwareManager(object):
         self.cut_spd = cut_spd if cut_spd != 0 else self.cut_spd
         self.travel_spd = travel_spd if travel_spd != 0 else self.travel_spd
 
-    def set_limits(self, x, y):
+
+    def set_bed_limits(self, x, y):
         """ Set software cutting bed size Xmax and Ymax limits.
         :param x: Bed Xmax in mm
         :type: double
@@ -101,6 +115,15 @@ class HardwareManager(object):
         """
         self.bed_xmax = x
         self.bed_ymax = y
+
+
+    def set_skew(self, angle):
+        """ Set X axis skew compensation angle
+        :param angle: Degrees CCW positive
+        :type: double
+        :return:
+        """
+        self.skew = angle
 
 
     #################### HW INTERFACE FUNCTIONS ########################

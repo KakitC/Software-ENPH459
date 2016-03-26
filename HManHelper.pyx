@@ -47,7 +47,7 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
         return -1
 
     # Check command against soft XY limits
-	# TODO debug
+	# Currently doesn't work
     # if hman.x + x_delta > hman.bed_xmax:
      #    x_delta = hman.bed_xmax - hman.x
     # elif hman.x + x_delta < 0:
@@ -57,8 +57,10 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # elif hman.y + y_delta < 0:
      #    y_delta = -hman.y
 
-    # TODO Check speed against max toggle rate (~<1kHz) and limit
-    # TODO Implement separate X/Y or A/B step_cal values
+    # Skew compensation (Convert to skewed coordinates
+    # TODO Debug this
+    y_delta -= x_delta * np.tan(np.radians(hman.skew))
+    x_delta = x_delta / np.cos(np.radians(hman.skew))
     # Convert to A,B pixels delta
     cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
     cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
@@ -69,13 +71,14 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # Create step list, lasing list, timing list
     step_list = _gen_step_list(a_delta, b_delta)
     las_list = _gen_las_list(hman, step_list, setting=las_setting)
+    # TODO Check speed against max toggle rate (~<1kHz) and limit
     time_list = _gen_time_list(hman, las_list)
 
     # TODO break up command into multiple cuts so OS can schedule interrupts?
     # Move laser head, with precise timings
     retval = hd.move_laser(step_list, las_list, time_list)
     if retval != 0:
-        # TODO Track current position if interrupted by switch
+        # TODO Track current position if interrupted by switch (How?)
         return retval
 
     # Update position tracking
@@ -225,10 +228,6 @@ cdef _gen_las_list(hman, step_list, setting="default"):
         return [0 for i in range(len(step_list))]
     if setting == "dark":
         return [1 for i in range(len(step_list))]
-    # else:
-    #     # TODO finish implementing this properly
-    #     print "gen_las_list not verified, not cutting"
-    #     return [0 for i in range(len(step_list))]
 
     cdef double x_now = hman.x
     cdef double y_now = hman.y

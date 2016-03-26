@@ -7,19 +7,34 @@ interpreter. Uses debugImport.py to do all the setup.
 # Import everything
 # TODO change to only if everything not imported
 execfile("dbgImport.py")
-
-gman.set_step_cal(10)
-
-# gman.G28()  # home
-# gman.G90()  # absolute
 gman.mots_en(0)
+
+# Hardware cal settings
+scaling = 10
+travel_feed = 100 * 60
+cut_feed = 2*60
+bed_xmax = 250
+bed_ymax = 280
+skew = .2
+
+set_dic = {
+    'scaling' : scaling,
+    "travel_feed" : travel_feed,
+    "cut_feed" : cut_feed,
+    "bed_xmax" : bed_xmax,
+    "bed_ymax" : bed_ymax,
+    "skew" : skew
+}
+
+# gman.set_step_cal(scaling)
+# gman.set_spd(cut_spd=cut_feed / 60, travel_spd=travel_feed / 60)
+# gman.set_bed_limits(bed_xmax, bed_ymax)
+# gman.set_skew(skew)
+gman.set_settings(set_dic)
 
 try:
 
     file = "raster_cal4.png"
-    scaling = 10
-    travel_feed = 100 * 60
-    cut_feed = 2*60
 
     start = time.clock()
     # pic = ipsR.raster_dither("testfiles/" + file, scaling, pad=(10, 10))
@@ -38,6 +53,7 @@ try:
     # gman.parse_gcode("output/" + file[0:-4] + ".gcode")
     # parse_time = time.clock()
     # print "Parse time: {}".format(parse_time - gcode_time)
+    print "Scanning bed"
     pic = scn.scan_bed(gman, 100)
     pic.save("output/bed_scan.png")
 

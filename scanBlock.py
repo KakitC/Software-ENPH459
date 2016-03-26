@@ -28,6 +28,7 @@ def scan_bed(gman, area):
     """
 
     # Calibration parameters
+    # TODO move calibration params to dictionary from CTL layer
     cam_fov_x, cam_fov_y = 32, 24  # Undistorted camera FoV in mm
     cam_feed = 100 * 60  # image taking feedrate (mm/min)
     resolution = (640, 480)
@@ -50,7 +51,9 @@ def scan_bed(gman, area):
             raise ValueError("Invalid area parameter")
 
     pics_arr = []
-    with picam.PiCamera() as cam:
+    # with picam.PiCamera() as cam:
+    try:
+        cam = picam.PiCamera()
         # Init
         cam.resolution = resolution
         # cam.start_preview(alpha=128)  # debug
@@ -69,8 +72,14 @@ def scan_bed(gman, area):
                 stream.seek(0)
                 pics_arr[j].append(Image.open(stream).convert(mode='L'))
 
-    pic = _scan_stitch(pics_arr, cam_fov_x, cam_fov_y)
-    return pic
+        cam.close()
+        pic = _scan_stitch(pics_arr, cam_fov_x, cam_fov_y)
+        return pic
+    except Exception:
+        print "Exception happened"
+        cam.close()
+        raise
+
 
 
 def _scan_stitch(pics_arr, cam_fov_x, cam_fov_y):

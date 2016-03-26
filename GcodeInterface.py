@@ -138,11 +138,11 @@ class GcodeInterface(HardwareManager):
 
         # TODO should this be changed to execute line by line? Parses whole file
         for execstr in execlist:
-            # TODO Catch exceptions and fail correctly
             try:
                 # debug
                 print(execstr)
                 exec(execstr)
+            # TODO Catch exceptions and fail correctly
             except RuntimeError:
                 self.M1()
                 raise
