@@ -34,28 +34,30 @@ gman.set_settings(set_dic)
 
 try:
 
-    file = "raster_cal4.png"
+    file = "raster_cal0.png"
 
     start = time.clock()
-    # pic = ipsR.raster_dither("testfiles/" + file, scaling, pad=(10, 10))
-    # """:type: PIL.Image.Image"""
-    # pic.save("output/" + file)
-    # ips_time = time.clock()
-    # print "IPS time: {}".format(ips_time - start)
-    #
-    # gman.set_las_mask(pic, scaling)
-    #
-    # ipsR.gen_gcode("output/" + file[0:-4] + ".gcode", pic, scaling, travel_feed,
-    #                cut_feed)
-    # gcode_time = time.clock()
-    # print "Gcode gen time: {}".format(gcode_time - ips_time)
-    #
-    # gman.parse_gcode("output/" + file[0:-4] + ".gcode")
-    # parse_time = time.clock()
-    # print "Parse time: {}".format(parse_time - gcode_time)
-    print "Scanning bed"
-    pic = scn.scan_bed(gman, 50)
-    pic.save("output/bed_scan.png")
+    pic = ipsR.raster_dither("testfiles/" + file, scaling, pad=(10, 10))
+    """:type: PIL.Image.Image"""
+    pic.save("output/" + file)
+    ips_time = time.clock()
+    print "IPS time: {}".format(ips_time - start)
+
+    gman.set_las_mask(pic, scaling)
+
+    ipsR.gen_gcode("output/" + file[0:-4] + ".gcode", pic, scaling, travel_feed,
+                   cut_feed)
+    gcode_time = time.clock()
+    print "Gcode gen time: {}".format(gcode_time - ips_time)
+
+    gman.parse_gcode("output/" + file[0:-4] + ".gcode")
+    parse_time = time.clock()
+    print "Parse time: {}".format(parse_time - gcode_time)
+
+
+    # print "Scanning bed"
+    # pic = scn.scan_bed(gman, 50)
+    # pic.save("output/bed_scan.png")
 
 
 except Exception:

@@ -109,7 +109,7 @@ MOT_B[DIR]      = _RPI_V2_GPIO_P1_12
 # GND           = GPIO_14
 
 # Laser output
-LAS             = _RPI_V2_GPIO_P1_26
+LAS             = _RPI_V2_GPIO_P1_26  # ACTIVE HIGH
 
 # All input switches
 cdef int XMIN       = 0
@@ -321,8 +321,7 @@ cdef int move_laser(step_list, las_list, time_list):
         delta = 0
 
         # Set laser
-        # TODO debug: laser_gen_lists not validated yet, don't fire
-        # bcm2835_gpio_write(LAS, las_arr[i])
+        bcm2835_gpio_write(LAS, las_arr[i])
         # bcm2835_gpio_write(LAS, 1 if las_arr[i] else 0)  # 8b power settings
 
         # Move steppers
