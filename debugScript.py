@@ -54,11 +54,11 @@ try:
     # parse_time = time.clock()
     # print "Parse time: {}".format(parse_time - gcode_time)
     print "Scanning bed"
-    pic = scn.scan_bed(gman, 100)
+    pic = scn.scan_bed(gman, 50)
     pic.save("output/bed_scan.png")
 
 
 except Exception:
     gman.M1()  # STOP
-    gman.M0()  # STAAAHP
+    # gman.M0()  # STAAAHP
     raise      # GET OUT

@@ -5,7 +5,7 @@ class. Primarily for the laser control algorithm.
 """
 
 cimport hardwareDriver as hd
-cimport numpy as np
+from math import *
 
 cpdef laser_cut(hman, double x_delta, double y_delta,
                 las_setting="default"):
@@ -57,10 +57,10 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # elif hman.y + y_delta < 0:
      #    y_delta = -hman.y
 
-    # Skew compensation (Convert to skewed coordinates
-    # TODO Debug this
-    y_delta -= x_delta * np.tan(np.radians(hman.skew))
-    x_delta = x_delta / np.cos(np.radians(hman.skew))
+    # Skew compensation (Convert to skewed coordinates)
+    # TODO Debug this?
+    y_delta -= x_delta * tan(radians(hman.skew))
+    x_delta /= cos(radians(hman.skew))
     # Convert to A,B pixels delta
     cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
     cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))

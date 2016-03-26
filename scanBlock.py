@@ -29,12 +29,15 @@ def scan_bed(gman, area):
 
     # Calibration parameters
     # TODO move calibration params to dictionary from CTL layer
-    cam_fov_x, cam_fov_y = 32, 24  # Undistorted camera FoV in mm
+    cam_fov = (12, 16)  # Undistorted camera FoV on focus plane in mm
     cam_feed = 100 * 60  # image taking feedrate (mm/min)
-    resolution = (640, 480)
+    resolution = (160, 120)  # Camera image resolution
+    cam_rot = 90
+    delay = .1  # Seconds to wait before taking picture
     # shutter_speed =
     # iso =
     # awb_mode = "off"
+    # TODO report pixel/mm scaling value?
 
 
     try:
@@ -57,23 +60,27 @@ def scan_bed(gman, area):
         # Init
         cam.resolution = resolution
         # cam.start_preview(alpha=128)  # debug
-        stream = io.BytesIO()
 
         if not gman.homed:
             gman.G28()
 
         gman.G90()
-        for j in range((ymax - ymin) / cam_fov_y + 1):
+        # TODO Account for laser being offset from cutting spot
+        for j in range(int((ymax - ymin) / cam_fov[1]) + 1):
             pics_arr.append([])
-            for i in range((xmax - xmin) / cam_fov_x + 1):
-                gman.G0((i + .5) * cam_fov_x, (j + .5) * cam_fov_y, cam_feed)
-                time.sleep(.2)  # wait for motion to stop, camera adjust
+            for i in range(int((xmax - xmin) / cam_fov[0]) + 1):
+                stream = io.BytesIO()
+                # TODO have a little bit of overlap between images to stitch
+                gman.G0((i + .5) * cam_fov[0], (j + .5) * cam_fov[1], cam_feed)
+                time.sleep(delay)  # wait for motion to stop, camera adjust
                 cam.capture(stream, format='jpeg')
                 stream.seek(0)
-                pics_arr[j].append(Image.open(stream).convert(mode='L'))
+                pic_ji = Image.open(stream).convert(mode='L')
+                pics_arr[j].append(pic_ji)
 
         cam.close()
-        pic = _scan_stitch(pics_arr, cam_fov_x, cam_fov_y)
+        pic = _scan_stitch(pics_arr, resolution)
+        # TODO Crop pic to given area and pad
         return pic
     except Exception:
         print "Exception happened"
@@ -82,17 +89,21 @@ def scan_bed(gman, area):
 
 
 
-def _scan_stitch(pics_arr, cam_fov_x, cam_fov_y):
+def _scan_stitch(pics_arr, resolution):
     """ Combine an array of Images together into one PIL Image
     :param pics_arr:
     :return: Single picture of scanning bed area
     """
-
+    # TODO Account for camera being mounted sideways
+    rotator = Image.ROTATE_90
     # TODO Apply geometric lens anti transform
-    # TODO use alpha blend mask
-    pic = Image.new("L", (len(pics_arr[0])*cam_fov_x, len(pics_arr)*cam_fov_y),
+    # TODO use alpha blend mask for edges for now
+    pic = Image.new("L", (len(pics_arr[0])*resolution[1],
+                          len(pics_arr)*resolution[0]),
                     color="white")
     for j, col in enumerate(pics_arr):
         for i, row in enumerate(col):
-            pic.paste(pics_arr[j][i], (i*cam_fov_x, j*cam_fov_y))
+            pic.paste(pics_arr[j][i].transpose(rotator),
+    #        pic.paste(pics_arr[j][i],
+                      (i*resolution[1], j*resolution[0]))
     return pic
