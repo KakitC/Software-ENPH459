@@ -27,13 +27,14 @@ class HardwareManager(object):
 
         # Default vals and settings
         self.step_cal = 10  # steps/mm
-        self.cut_spd = 1  # mm/s
-        self.travel_spd = 30  # mm/s
-        self.las_mask = np.array([[255]])  # 255: White - PIL Image 0-255 vals
-        self.las_dpmm = 0.00000001  # ~0 Dots Per mm, 1 pixel for whole space
+        self.cut_spd = 3  # mm/s
+        self.travel_spd = 100  # mm/s
         self.bed_xmax = 250  # mm
         self.bed_ymax = 280  # mm
         self.skew = 0  # degrees
+
+        self.las_mask = np.array([[255]])  # 255: White - PIL Image 0-255 vals
+        self.las_dpmm = 0.00000001  # ~0 Dots Per mm, 1 pixel for whole space
 
         # Vals on init
         self.homed = False
@@ -61,9 +62,25 @@ class HardwareManager(object):
         """
         for x in dic:
             try:
-                setattr(self, x, dic[x])
+                setattr(self, x, dic[x])  # Not very safe
             except AttributeError:
                 continue
+
+    def get_settings(self):
+        """ Retrieve a dictionary containing all HardwareManager settings
+        :return: Dictionary of properties
+        :rtype: dict
+        """
+        set_dic = {
+            'scaling': self.step_cal,
+            "cut_spd": self.cut_spd,
+            "travel_spd": self.travel_spd,
+            "bed_xmax": self.bed_xmax,
+            "bed_ymax": self.bed_ymax,
+            "skew": self.skew,
+            "las_mask": self.las_mask,
+            "las_dpmm": self.las_dpmm
+        }
 
 
     def set_las_mask(self, img, scale):

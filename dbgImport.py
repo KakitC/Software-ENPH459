@@ -9,6 +9,7 @@ import PIL
 import numpy as np
 import math
 import time
+import picamera as picam
 
 import platform
 import os

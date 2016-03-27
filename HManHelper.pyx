@@ -58,12 +58,12 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
      #    y_delta = -hman.y
 
     # Skew compensation (Convert to skewed coordinates)
-    # TODO Debug this?
-    y_delta -= x_delta * tan(radians(hman.skew))
-    x_delta /= cos(radians(hman.skew))
+    # TODO Account for skew in other places too
+    # y_delta -= x_delta * tan(radians(hman.skew))
+    # x_delta /= cos(radians(hman.skew))
     # Convert to A,B pixels delta
-    cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
-    cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
+    cdef int a_delta = int(round((x_delta + y_delta) / hman.step_cal))
+    cdef int b_delta = int(round((x_delta - y_delta) / hman.step_cal))
 
     if a_delta == 0 and b_delta == 0:  # this kind of works
         return 0
@@ -180,7 +180,7 @@ cdef _gen_step_list(int a_delta, int b_delta):
 
     # Divide into octants by swapping so A > B
     if b_delta > a_delta:
-        a_delta, b_delta = b_delta, a_delta # yep, that's safe /s
+        a_delta, b_delta = b_delta, a_delta # yep, that's safe and portable /s
         ab_flip_flag = True
 
     # Generate step list for line in first octant. Bresenham's algo here
@@ -242,19 +242,19 @@ cdef _gen_las_list(hman, step_list, setting="default"):
     las_list = []
 
     for i in step_list:
-        x_now += 0.5*(i[0] + i[1]) * hman.step_cal
-        y_now += 0.5*(i[0] - i[1]) * hman.step_cal
+        x_now += 0.5*(i[0] + i[1]) / hman.step_cal  # steps / (steps/mm)
+        y_now += 0.5*(i[0] - i[1]) / hman.step_cal
 
         # Sets laser power to 0 if mask is 255 (blank = don't cut)
-        x_px = int(x_now * hman.las_dpmm)
+        x_px = int(x_now * hman.las_dpmm)  # mm * px/mm
         y_px = int(y_now * hman.las_dpmm)
 
-        # TODO account for out-of-bounds errors
-        if x_px >= hman.las_mask.shape[0] or y_px >= hman.las_mask.shape[1]:
+        if  y_px >= hman.las_mask.shape[0] or x_px >= hman.las_mask.shape[1]:
             las_list.append(0)
             continue
 
-        las_list.append(1 if hman.las_mask[x_px][y_px] != 255 else 0)
+        # y - row, x - column
+        las_list.append(1 if hman.las_mask[y_px][x_px] != 255 else 0)
         # las_list.append(255-hman.las_mask[x_px][y_px]) # 8b power settings
         # TODO do 8 bit laser power settings and gamma curve
 
