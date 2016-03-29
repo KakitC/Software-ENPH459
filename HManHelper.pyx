@@ -62,8 +62,8 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # y_delta -= x_delta * tan(radians(hman.skew))
     # x_delta /= cos(radians(hman.skew))
     # Convert to A,B pixels delta
-    cdef int a_delta = int(round((x_delta + y_delta) / hman.step_cal))
-    cdef int b_delta = int(round((x_delta - y_delta) / hman.step_cal))
+    cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
+    cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
 
     if a_delta == 0 and b_delta == 0:  # this kind of works
         return 0
@@ -111,11 +111,11 @@ cpdef home_xy(hman):
             # If no endstops triggered after the move or safety is engaged
             hman.homed = False
             hman.mots_en(0)
-            return -1
+            return -status if status != 0 else -999
         elif status & (0x1 << hd.YMAX + 0x1 << hd.XMAX):
             hman.mots_en(0)
             hman.homed = False
-            return -1
+            return -status
 
         # If hit minstop, use a while to back away overriding switch interrupt
         # TODO Test how repeatable this is
@@ -273,6 +273,7 @@ cdef _gen_time_list(hman, las_list):
 
     # TODO do 8 bit timings
     # TODO account for diagonal travel being faster than orthogonal
+    # TODO Write in acceleration code so we don't get vertical skew
     return [int(hd.USEC_PER_SEC / (hman.cut_spd * hman.step_cal)) if i
             else int(hd.USEC_PER_SEC / (hman.travel_spd * hman.step_cal))
             for i in las_list]

@@ -34,6 +34,8 @@ def scan_bed(gman, area):
     resolution = (160, 120)  # Camera image resolution
     cam_rot = 90
     delay = .1  # Seconds to wait before taking picture
+    overlap = (.5, .5)  # Fraction overlap on x, y between pictures
+    offset = (30, 0)  # Camera center offset from (0,0)
     # shutter_speed =
     # iso =
     # awb_mode = "off"
@@ -70,16 +72,15 @@ def scan_bed(gman, area):
             pics_arr.append([])
             for i in range(int((xmax - xmin) / cam_fov[0]) + 1):
                 stream = io.BytesIO()
-                # TODO have a little bit of overlap between images to stitch
                 gman.G0((i + .5) * cam_fov[0], (j + .5) * cam_fov[1], cam_feed)
                 time.sleep(delay)  # wait for motion to stop, camera adjust
                 cam.capture(stream, format='jpeg')
                 stream.seek(0)
                 pic_ji = Image.open(stream).convert(mode='L')
-                pics_arr[j].append(pic_ji)
-
+                pics_arr[j].append(pic_ji.transpose(Image.ROTATE_90))
+                # TODO Remove rotate 90 deg when camera is changed
         cam.close()
-        pic = _scan_stitch(pics_arr, resolution)
+        pic = _scan_stitch(pics_arr, resolution, overlap)
         # TODO Crop pic to given area and pad
         return pic
     except Exception:
@@ -89,21 +90,24 @@ def scan_bed(gman, area):
 
 
 
-def _scan_stitch(pics_arr, resolution):
+def _scan_stitch(pics_arr, resolution, overlap):
     """ Combine an array of Images together into one PIL Image
+
+    Relies on knowing the location of each image being taken, doesn't actually
+    do proper image stitching feature recognition
+
     :param pics_arr:
     :return: Single picture of scanning bed area
     """
-    # TODO Account for camera being mounted sideways
-    rotator = Image.ROTATE_90
     # TODO Apply geometric lens anti transform
     # TODO use alpha blend mask for edges for now
-    pic = Image.new("L", (len(pics_arr[0])*resolution[1],
-                          len(pics_arr)*resolution[0]),
+    # TODO account for overlap percentage between images
+    # (not real image stitching, naive)
+    pic = Image.new("L", (len(pics_arr[0]) * resolution[1] * (1 - overlap),
+                          len(pics_arr) * resolution[0]) * (1 - overlap),
                     color="white")
     for j, col in enumerate(pics_arr):
         for i, row in enumerate(col):
-            pic.paste(pics_arr[j][i].transpose(rotator),
-    #        pic.paste(pics_arr[j][i],
-                      (i*resolution[1], j*resolution[0]))
+            pic.paste(pics_arr[j][i], (i*resolution[1] * (1 - overlap),
+                                       j*resolution[0]) * (1 - overlap))
     return pic

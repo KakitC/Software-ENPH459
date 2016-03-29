@@ -16,6 +16,7 @@ cut_feed = 5*60
 bed_xmax = 250
 bed_ymax = 280
 skew = .2
+step_cal = 10
 
 set_dic = {
     'scaling' : scaling,
@@ -23,10 +24,11 @@ set_dic = {
     "cut_feed" : cut_feed,
     "bed_xmax" : bed_xmax,
     "bed_ymax" : bed_ymax,
-    "skew" : skew
+    "skew" : skew,
+    "step_cal" : step_cal
 }
 
-gman.set_step_cal(scaling)
+gman.set_step_cal(step_cal)
 gman.set_spd(cut_spd=cut_feed / 60, travel_spd=travel_feed / 60)
 gman.set_bed_limits(bed_xmax, bed_ymax)
 gman.set_skew(skew)
@@ -35,11 +37,11 @@ gman.set_skew(skew)
 
 try:
 
-    file = "raster_cal0.png"
+    file = "raster_cal4.png"
 
     start = time.clock()
     pic = ipsR.raster_dither("testfiles/" + file, scaling, pad=(10, 10),
-                             blackwhite=True)
+                             blackwhite=False)
     """:type: PIL.Image.Image"""
     pic.save("output/" + file)
     ips_time = time.clock()

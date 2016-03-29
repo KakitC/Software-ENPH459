@@ -263,8 +263,9 @@ class GcodeInterface(HardwareManager):
         """ G28: Move to origin (Home)
         :return: void
         """
-
-        if self.home_xy() != 0:
+        val = self.home_xy()
+        if val != 0:
+            print val
             raise RuntimeError("G28 Homing sequence failed")
 
 
