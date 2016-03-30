@@ -49,14 +49,14 @@ cpdef _gen_step_list(int a_delta, int b_delta):
     # TODO Optimize gen_step_list by using C arrays
     step_list = []
     cdef int a_now = 0
-    cdef int error = 2*b_delta - a_delta
+    cdef int error = b_delta - a_delta
     while a_now < a_delta:
-        a_now += 1
         ab_list = [1,0]
-        error += 2*b_delta
         if error >= 0:
             ab_list[1] = 1
-            error -= 2*a_delta
+            error -= a_delta
+        a_now += 1
+        error += b_delta
         step_list.append(ab_list)
 
     # Reverse octants, quadrants

@@ -140,7 +140,7 @@ class GcodeInterface(HardwareManager):
         for execstr in execlist:
             try:
                 # debug
-                print(execstr)
+                # print(execstr)
                 exec(execstr)
             # TODO Catch exceptions and fail correctly
             except RuntimeError:
@@ -265,8 +265,8 @@ class GcodeInterface(HardwareManager):
         """
         val = self.home_xy()
         if val != 0:
-            print val
-            raise RuntimeError("G28 Homing sequence failed")
+            raise RuntimeError("G28 Homing sequence failed (Error: "
+                               + bin(val) + ")")
 
 
     def G90(self):

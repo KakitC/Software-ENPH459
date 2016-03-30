@@ -61,7 +61,8 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     # TODO Account for skew in other places too
     # y_delta -= x_delta * tan(radians(hman.skew))
     # x_delta /= cos(radians(hman.skew))
-    # Convert to A,B pixels delta
+
+    # Convert to A,B steps delta
     cdef int a_delta = int(round((x_delta + y_delta) * hman.step_cal))
     cdef int b_delta = int(round((x_delta - y_delta) * hman.step_cal))
 
@@ -80,6 +81,7 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
     if retval != 0:
         # TODO Track current position if interrupted by switch (How?)
         return retval
+
 
     # Update position tracking
     hman.x += 0.5*(a_delta + b_delta) / hman.step_cal
@@ -111,11 +113,11 @@ cpdef home_xy(hman):
             # If no endstops triggered after the move or safety is engaged
             hman.homed = False
             hman.mots_en(0)
-            return -status if status != 0 else -999
+            return status if status != 0 else -1
         elif status & (0x1 << hd.YMAX + 0x1 << hd.XMAX):
             hman.mots_en(0)
             hman.homed = False
-            return -status
+            return status
 
         # If hit minstop, use a while to back away overriding switch interrupt
         # TODO Test how repeatable this is
@@ -187,24 +189,24 @@ cdef _gen_step_list(int a_delta, int b_delta):
     # TODO Optimize gen_step_list by using C arrays
     step_list = []
     cdef int a_now = 0
-    cdef int error = 2*b_delta - a_delta
+    cdef int error = b_delta - a_delta
     while a_now < a_delta:
-        a_now += 1
         ab_list = [1,0]
-        error += 2*b_delta
         if error >= 0:
             ab_list[1] = 1
-            error -= 2*a_delta
+            error -= a_delta
+        a_now += 1
+        error += b_delta
         step_list.append(ab_list)
 
     # Reverse octants, quadrants
     if ab_flip_flag:
-        step_list = [[_[1], _[0]] for _ in step_list]
+        step_list = [[ab[1], ab[0]] for ab in step_list]
 
     if a_flip_flag:
-        step_list = [[-_[0], _[1]] for _ in step_list]
+        step_list = [[-ab[0], ab[1]] for ab in step_list]
     if b_flip_flag:
-        step_list = [[_[0], -_[1]] for _ in step_list]
+        step_list = [[ab[0], -ab[1]] for ab in step_list]
 
     return step_list
 
@@ -273,7 +275,7 @@ cdef _gen_time_list(hman, las_list):
 
     # TODO do 8 bit timings
     # TODO account for diagonal travel being faster than orthogonal
-    # TODO Write in acceleration code so we don't get vertical skew
+    # TODO Write in acceleration code (look ahead in las_list)
     return [int(hd.USEC_PER_SEC / (hman.cut_spd * hman.step_cal)) if i
             else int(hd.USEC_PER_SEC / (hman.travel_spd * hman.step_cal))
             for i in las_list]

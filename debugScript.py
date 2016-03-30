@@ -15,7 +15,7 @@ travel_feed = 100 * 60
 cut_feed = 5*60
 bed_xmax = 250
 bed_ymax = 280
-skew = .2
+skew = 0 #.2
 step_cal = 10
 
 set_dic = {
@@ -37,24 +37,24 @@ gman.set_skew(skew)
 
 try:
 
-    file = "raster_cal4.png"
+    name = "thank you.png"
 
     start = time.clock()
-    pic = ipsR.raster_dither("testfiles/" + file, scaling, pad=(10, 10),
-                             blackwhite=False)
+    pic = ipsR.raster_dither("testfiles/" + name, scaling, pad=(100, 10),
+                             blackwhite=True)
     """:type: PIL.Image.Image"""
-    pic.save("output/" + file)
+    pic.save("output/" + name)
     ips_time = time.clock()
     print "IPS time: {}".format(ips_time - start)
 
     gman.set_las_mask(pic, scaling)
 
-    ipsR.gen_gcode("output/" + file[0:-4] + ".gcode", pic, set_dic)
+    ipsR.gen_gcode("output/" + name[0:-4] + ".gcode", pic, set_dic)
 #                   scaling, travel_feed, cut_feed)
     gcode_time = time.clock()
     print "Gcode gen time: {}".format(gcode_time - ips_time)
 
-    gman.parse_gcode("output/" + file[0:-4] + ".gcode")
+    gman.parse_gcode("output/" + name[0:-4] + ".gcode")
     parse_time = time.clock()
     print "Parse/execute time: {}".format(parse_time - gcode_time)
 

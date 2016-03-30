@@ -64,7 +64,7 @@ pic = pic.convert("L")
 hman.las_mask = np.array(pic)
 hman.las_dpmm = 10
 
-x_delta, y_delta = 100,0
+x_delta, y_delta = .06,.99
 a_delta = int(round((x_delta + y_delta) * hman.step_cal))
 b_delta = int(round((x_delta - y_delta) * hman.step_cal))
 step_list = cs._gen_step_list(a_delta,b_delta)
@@ -78,9 +78,19 @@ for i in step_list:
     x.append(x_now)
     y.append(y_now)
 
-r1 = 50
-r2 = r1+10
+# Update position tracking
+hman.x += 0.5*(a_delta + b_delta) / hman.step_cal
+hman.y += 0.5*(a_delta - b_delta) / hman.step_cal
+
+r1 = 0
+r2 = -1#r1+10
+print "x, y delta", x_delta, y_delta
+print "a, b delta", a_delta, b_delta
+print "list length", len(step_list)
 print "step_list", step_list[r1:r2]
-#print "Position", zip(x,y)[r1:r2]
-print "las_list", las_list[r1:r2]
-print "time_list", time_list[r1:r2]
+print "Position", zip(x,y)[r1:r2]
+print "hman new x, y", hman.x, hman.y
+print "real position", zip(x,y)[-1]
+print "len of pos list", len(x)
+#print "las_list", las_list[r1:r2]
+#print "time_list", time_list[r1:r2]
