@@ -20,8 +20,8 @@ if OS == "Windows":
     print "WARNING: This will not work in Windows"
     #os.system("build.bat")
 else:
-    print "Recompiling..."
-    os.system("sh build.sh")
+    #print "Recompiling..."
+    #os.system("sh build.sh")
     os.nice(-20)
 
 import HardwareManager as HM

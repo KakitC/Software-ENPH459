@@ -140,7 +140,7 @@ class GcodeInterface(HardwareManager):
         for execstr in execlist:
             try:
                 # debug
-                # print(execstr)
+                print(execstr)
                 exec(execstr)
             # TODO Catch exceptions and fail correctly
             except RuntimeError:

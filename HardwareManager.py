@@ -145,6 +145,8 @@ class HardwareManager(object):
 
     #################### HW INTERFACE FUNCTIONS ########################
 
+    # TODO Write functions for calibration and getting hardware shape (bed size)
+
     def home_xy(self):
         """ Initialize laser position by moving to endstop min position (0,0).
 

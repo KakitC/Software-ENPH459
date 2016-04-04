@@ -6,6 +6,7 @@ class. Primarily for the laser control algorithm.
 
 cimport hardwareDriver as hd
 from math import *
+import time
 
 cpdef laser_cut(hman, double x_delta, double y_delta,
                 las_setting="default"):
@@ -70,10 +71,21 @@ cpdef laser_cut(hman, double x_delta, double y_delta,
         return 0
 
     # Create step list, lasing list, timing list
+    # Diagnostics
+    # start = time.time()
+
     step_list = _gen_step_list(a_delta, b_delta)
+    # step_time = time.time()
+    # print "gen_step_list time: ", step_time - start
+
     las_list = _gen_las_list(hman, step_list, setting=las_setting)
+    # las_time = time.time()
+    # print "las_step_list time: ", las_time - step_time
+    # time_time = time.time()
+
     # TODO Check speed against max toggle rate (~<1kHz) and limit
     time_list = _gen_time_list(hman, las_list)
+    # print "gen_time_list time: ", time_time - las_time
 
     # TODO break up command into multiple cuts so OS can schedule interrupts?
     # Move laser head, with precise timings
