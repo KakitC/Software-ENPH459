@@ -29,12 +29,13 @@ def scan_bed(gman, area):
 
     # Calibration parameters
     # TODO move calibration params to dictionary from CTL layer
-    cam_fov = (12, 16)  # Undistorted camera FoV on focus plane in mm
+    cam_fov = (12, 16)  # Undistorted camera FoV area on focus plane in mm
     cam_feed = 100 * 60  # image taking feedrate (mm/min)
     resolution = (160, 120)  # Camera image resolution
     cam_rot = 90
     delay = .1  # Seconds to wait before taking picture
-    overlap = (.5, .5)  # Fraction overlap on x, y between pictures
+    overlap = (.5, .5)  # Fraction overlap on x, y between pictures.
+    # Depends on cam_fov setting.
     offset = (30, 0)  # Camera center offset from (0,0)
     # shutter_speed =
     # iso =
@@ -46,13 +47,13 @@ def scan_bed(gman, area):
         xmin, ymin = 0, 0
         xmax = float(area)
         ymax = xmax
-    except ValueError:
-        if len(area) == 4:
+    except ValueError: # area was not a single number
+        if len(area) == 4:  # 4tuple bounding box
             xmin, ymin, xmax, ymax = area
-        elif len(area) == 2:
+        elif len(area) == 2:  # 2tuple size
             xmin, ymin = 0, 0
             xmax, ymax = area
-        else:
+        else:  # lol what is this
             raise ValueError("Invalid area parameter")
 
     pics_arr = []
@@ -100,14 +101,31 @@ def _scan_stitch(pics_arr, resolution, overlap):
     :return: Single picture of scanning bed area
     """
     # TODO Apply geometric lens anti transform
-    # TODO use alpha blend mask for edges for now
-    # TODO account for overlap percentage between images
     # (not real image stitching, naive)
     pic = Image.new("L", (len(pics_arr[0]) * resolution[1] * (1 - overlap),
                           len(pics_arr) * resolution[0]) * (1 - overlap),
                     color="white")
     for j, col in enumerate(pics_arr):
         for i, row in enumerate(col):
-            pic.paste(pics_arr[j][i], (i*resolution[1] * (1 - overlap),
-                                       j*resolution[0]) * (1 - overlap))
+            # pic.paste(pics_arr[j][i], (i*resolution[1] * (1 - overlap),
+            #                            j*resolution[0]) * (1 - overlap))
+            # Put new image to correct position
+            # coordinates for new image
+            top = i * resolution[1] * (1 - overlap[1])
+            left = j * resolution[0] * (1 - overlap[0])
+            pad = Image.new("L", pic.size)
+            pad.paste(pics_arr[j][i], (top, left))
+
+            # Set blend mask: 0 for keep, 127 for overlap, 255 for new
+            mask = Image.new("L", pic.size)  # init to 0
+            # grey box size of img
+            mask.paste(127, (left, top, left + pics_arr[j][i].size[0],
+                             top + pics_arr[j][i].size[1]))
+            # White box, extends all the way down/right
+            left_offset = left if j == 0 else left + resolution[0] * overlap[0]
+            top_offset = top if i == 0 else top + resolution[1] * overlap[1]
+            mask.paste(255, (left_offset, top_offset))
+
+            pic = Image.composite(pic, pad, mask)
+
     return pic

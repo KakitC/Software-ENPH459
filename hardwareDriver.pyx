@@ -274,7 +274,7 @@ cpdef void delay_millis(long ms):
 
     bcm2835_delay(ms)  # whatever timing in ms range
 
-
+# TODO Try out pigpio library DMA's for timing/motion
 cdef int move_laser(step_list, las_list, time_list):
     """ Perform the laser head step motion loop with precise timings.
 
