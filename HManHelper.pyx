@@ -286,8 +286,10 @@ cdef _gen_time_list(hman, las_list):
     """
 
     # TODO do 8 bit timings
-    # TODO account for diagonal travel being faster than orthogonal
-    # TODO Write in acceleration code (look ahead in las_list)
     return [int(hd.USEC_PER_SEC / (hman.cut_spd * hman.step_cal)) if i
             else int(hd.USEC_PER_SEC / (hman.travel_spd * hman.step_cal))
             for i in las_list]
+
+    # # Accel code doesn't really work with 8 bit timings
+    # time_list = []
+    # for l in las_list:

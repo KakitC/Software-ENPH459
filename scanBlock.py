@@ -47,6 +47,7 @@ def scan_bed(gman, area):
         xmin, ymin = 0, 0
         xmax = float(area)
         ymax = xmax
+        # TODO fix: or TypeError
     except ValueError: # area was not a single number
         if len(area) == 4:  # 4tuple bounding box
             xmin, ymin, xmax, ymax = area
@@ -84,7 +85,7 @@ def scan_bed(gman, area):
         pic = _scan_stitch(pics_arr, resolution, overlap)
         # TODO Crop pic to given area and pad
         return pic
-    except Exception:
+    except Exception:  # TODO check this catches any errors on closing
         print "Exception happened"
         cam.close()
         raise
@@ -102,30 +103,78 @@ def _scan_stitch(pics_arr, resolution, overlap):
     """
     # TODO Apply geometric lens anti transform
     # (not real image stitching, naive)
-    pic = Image.new("L", (len(pics_arr[0]) * resolution[1] * (1 - overlap),
-                          len(pics_arr) * resolution[0]) * (1 - overlap),
+    # size = int(resolution * (n - (n-1) overlap))
+    pic = Image.new("L", (int(resolution[0] *
+                             ((len(pics_arr[0]) - 1) * (1 - overlap[0]) + 1)),
+                          int(resolution[1] *
+                             ((len(pics_arr[1]) - 1) * (1 - overlap[1]) + 1))
+                          ),
                     color="white")
+
+    # Blend by column, then add to whole picture
     for j, col in enumerate(pics_arr):
+        col_pic = Image.new("L", (resolution[0], pic.size[1]))
         for i, row in enumerate(col):
-            # pic.paste(pics_arr[j][i], (i*resolution[1] * (1 - overlap),
-            #                            j*resolution[0]) * (1 - overlap))
-            # Put new image to correct position
-            # coordinates for new image
-            top = i * resolution[1] * (1 - overlap[1])
-            left = j * resolution[0] * (1 - overlap[0])
-            pad = Image.new("L", pic.size)
-            pad.paste(pics_arr[j][i], (top, left))
+            sample = col[i]
 
-            # Set blend mask: 0 for keep, 127 for overlap, 255 for new
-            mask = Image.new("L", pic.size)  # init to 0
-            # grey box size of img
-            mask.paste(127, (left, top, left + pics_arr[j][i].size[0],
-                             top + pics_arr[j][i].size[1]))
-            # White box, extends all the way down/right
-            left_offset = left if j == 0 else left + resolution[0] * overlap[0]
-            top_offset = top if i == 0 else top + resolution[1] * overlap[1]
-            mask.paste(255, (left_offset, top_offset))
+            top = int(i * resolution[1] * (1 - overlap[1]))
+            pad = Image.new("L", col_pic.size)
+            pad.paste(sample, (0, top))
 
-            pic = Image.composite(pic, pad, mask)
+            mask = Image.new("L", col_pic.size, 0)
+            mask.paste(255, (0, top, sample.size[0], top + sample.size[1]))
+            if i > 0:
+                mask.paste(127, (0, top, sample.size[0],
+                           int(top + sample.size[1] * overlap[1])))
+
+            col_pic.paste(pad, mask=mask)
+
+        left = int(j * resolution[0] * (1 - overlap[0]))
+        pad = Image.new("L", pic.size)
+        pad.paste(col_pic, (left, 0))
+
+        mask = Image.new("L", pic.size, 0)
+        mask.paste(255, (left, 0, left + col_pic.size[0], col_pic.size[1]))
+        if j > 0:
+            mask.paste(127, (left, 0, int(left + col_pic.size[0] * overlap[0]),
+                             col_pic.size[1]))
+
+        # pic = Image.composite(pic, )
+        pic.paste(pad, mask=mask)
 
     return pic
+
+#    # Doesn't work, doesn't account for corners
+    # for j, col in enumerate(pics_arr):
+    #     for i, row in enumerate(col):
+    #         # pic.paste(pics_arr[j][i], (i*resolution[1] * (1 - overlap),
+    #         #                            j*resolution[0]) * (1 - overlap))
+    #         # Put new image to correct position
+    #         # coordinates for new image
+    #         sample = pics_arr[j][i]
+    #
+    #         top = int(i * resolution[0] * (1 - overlap[0]))
+    #         left = int(j * resolution[1] * (1 - overlap[1]))
+    #         pad = Image.new("L", pic.size)
+    #         pad.paste(sample, (left, top))
+    #
+    #         # Set blend mask: 255 for keep, 127 for overlap, 0 for new
+    #         mask = Image.new("L", pic.size, 255)
+    #         # grey box size of img
+    #         mask.paste(127, (left, top, left + sample.size[0],
+    #                          top + sample.size[1]))
+    #
+    #         # Hard mask box, extends all the way down/right
+    #         left_offset = left if j == 0 \
+    #             else left + int(resolution[0] * overlap[0])
+    #         top_offset = top if i == 0 \
+    #             else top + int(resolution[1] * overlap[1])
+    #         mask.paste(0, (left_offset, top_offset,
+    #                        int(left_offset + sample.size[0] * (1 - overlap[0])),
+    #                        int(top_offset + sample.size[1] * (1 - overlap[1]))
+    #                        )
+    #                    )
+    #
+    #         pic = Image.composite(pic, pad, mask)
+    # return pic
+
