@@ -8,6 +8,7 @@ import numpy as np
 
 import HManHelper as HMH
 import hardwareDriver as hd
+# import hardwareDriverPigpio as hd
 
 
 class HardwareManager(object):

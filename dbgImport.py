@@ -22,6 +22,7 @@ if OS == "Windows":
 else:
     #print "Recompiling..."
     #os.system("sh build.sh")
+    # TODO check pigpiod is running
     os.nice(-20)
 
 import HardwareManager as HM

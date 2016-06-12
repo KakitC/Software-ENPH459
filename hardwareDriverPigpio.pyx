@@ -1,12 +1,14 @@
 """
-hardwareDriver.pyx
+hardwareDriverPigpio.pyx
 A Cython module for all low-level hardware access functions, containing all
-GPIO functions. Uses the BCM2835 C library for GPIO access.
+GPIO functions. Uses the pigpio library for DMA based stepper timings.
+Intended to be a drop-in replacement for the original hardwareDriver module.
 """
 __author__ = 'Kakit'
 
 import math
 from cpython cimport array
+import pigpio as pig
 
 # Define external functions
 cdef extern from "sys/time.h":
@@ -15,25 +17,23 @@ cdef extern from "sys/time.h":
         int tv_usec
     int gettimeofday(timeval *timer, void *)
 
-# Import bcm2835 c lib functions and vars
-cdef extern from "bcm2835.h":
+# Import pigpio c lib functions and vars
+cdef extern from "pigpio.h":
     ctypedef int uint8_t
     ctypedef int uint32_t
+    ctypedef int unsigned
 
     # GPIO init functions
-    int bcm2835_init()
-    int bcm2835_close()
-    void bcm2835_set_debug(uint8_t debug) # Debug only, don't write GPIO, print
+    int gpioInitialise()
+    int gpioTerminate()
 
     # GPIO functions
-    void bcm2835_gpio_fsel(uint8_t pin, uint8_t mode) # Set pin I or O
-    void bcm2835_gpio_write(uint8_t pin, uint8_t on) # Write on val to pin
-    void bcm2835_gpio_set(uint8_t pin) # Set to 1
-    void bcm2835_gpio_clr(uint8_t pin) # Set to 0
-    void bcm2835_gpio_set_multi(uint32_t mask) # Set mask bits to 1
-    void bcm2835_gpio_clr_multi(uint32_t mask) # Clear mask bits to 0
-    uint8_t bcm2835_gpio_lev(uint8_t pin) # Reads pin state (I or O)
-    void bcm2835_gpio_set_pud(uint8_t pin, uint8_t pud) # Set pull up/down mode
+    int gpioSetMode(unsigned gpio, unsigned mode) # Set pin I or O
+    int gpioGetMode(unsigned gpio)  # Reads GPIO mode
+    int gpioRead(unsigned gpio)  # Read pin
+    int gpioWrite(unsigned gpio, unsigned level)  # Sets pin
+    int gpioSetPullUpDown(unsigned gpio, unsigned pud)  # Sets pull up/down
+    # missing set/clr functions, set/clr/write multi
 
     # Interrupt register functions
     uint8_t bcm2835_gpio_eds(uint8_t pin) # Checks if pin detects edge event
@@ -49,39 +49,23 @@ cdef extern from "bcm2835.h":
     void bcm2835_gpio_len(uint8_t pin) # Enable Low detect event
     void bcm2835_gpio_clr_len(uint8_t pin) # Disable Low detect event
 
-    # Delays depend on nanosleep() wakeup time, like up to 80us
-    void bcm2835_delay (unsigned int millis) # Delay millis
-    void bcm2835_delayMicroseconds (unsigned int micros) # Delay micros.
+    # Delays who knows how long lol
+    uint32_t gpioDelay(uint32_t micros)  # delay micros
 
-    # Not included: SPI functions
+    # Not included: SPI functions, I2C, serial
 
-    # bcm2835 pinout for Raspberry Pi B+
-    # bcm2835 library doesn't support physical pins 27-40
-    # (GPIO 5, 6, 12, 13, 19, 26, 20, 21)
-    int _RPI_V2_GPIO_P1_03 "RPI_V2_GPIO_P1_03"  # =  2  #Version 2, Pin P1-03
-    int _RPI_V2_GPIO_P1_05 "RPI_V2_GPIO_P1_05"  # =  3  #Version 2, Pin P1-05
-    int _RPI_V2_GPIO_P1_07 "RPI_V2_GPIO_P1_07"  # =  4  #Version 2, Pin P1-07
-    int _RPI_V2_GPIO_P1_08 "RPI_V2_GPIO_P1_08"  # = 14  #Version 2, Pin P1-08, defaults to alt function 0 UART0_TXD
-    int _RPI_V2_GPIO_P1_10 "RPI_V2_GPIO_P1_10"  # = 15  #Version 2, Pin P1-10, defaults to alt function 0 UART0_RXD
-    int _RPI_V2_GPIO_P1_11 "RPI_V2_GPIO_P1_11"  # = 17  #Version 2, Pin P1-11
-    int _RPI_V2_GPIO_P1_12 "RPI_V2_GPIO_P1_12"  # = 18  #Version 2, Pin P1-12
-    int _RPI_V2_GPIO_P1_13 "RPI_V2_GPIO_P1_13"  # = 27  #Version 2, Pin P1-13
-    int _RPI_V2_GPIO_P1_15 "RPI_V2_GPIO_P1_15"  # = 22  #Version 2, Pin P1-15
-    int _RPI_V2_GPIO_P1_16 "RPI_V2_GPIO_P1_16"  # = 23  #Version 2, Pin P1-16
-    int _RPI_V2_GPIO_P1_18 "RPI_V2_GPIO_P1_18"  # = 24  #Version 2, Pin P1-18
-    int _RPI_V2_GPIO_P1_19 "RPI_V2_GPIO_P1_19"  # = 10  #Version 2, Pin P1-19, MOSI when SPI0 in use
-    int _RPI_V2_GPIO_P1_21 "RPI_V2_GPIO_P1_21"  # =  9  #Version 2, Pin P1-21, MISO when SPI0 in use
-    int _RPI_V2_GPIO_P1_22 "RPI_V2_GPIO_P1_22"  # = 25  #Version 2, Pin P1-22
-    int _RPI_V2_GPIO_P1_23 "RPI_V2_GPIO_P1_23"  # = 11  #Version 2, Pin P1-23, CLK when SPI0 in use
-    int _RPI_V2_GPIO_P1_24 "RPI_V2_GPIO_P1_24"  # =  8  #Version 2, Pin P1-24, CE0 when SPI0 in use
-    int _RPI_V2_GPIO_P1_26 "RPI_V2_GPIO_P1_26"  # =  7  #Version 2, Pin P1-26, CE1 when SPI0 in use
+    # pigpio uses BCM pin numbering, not physical
 
     # Port function select modes for bcm2835_gpio_fsel()
-    int _GPIO_FSEL_INPT "BCM2835_GPIO_FSEL_INPT "# = 0b000,   ///< Input
-    int _GPIO_FSEL_OUTP "BCM2835_GPIO_FSEL_OUTP" # = 0b001,   ///< Output
+    int GPIO_INPUT "PI_INPUT "# = 0b000,   ///< Input
+    int GPIO_OUTPUT "PI_OUTPUT" # = 0b001,   ///< Output
     # Other definitions
-    int HI "HIGH"
-    int LO "LOW"
+    int HI "PI_HIGH"
+    int LO "PI_LOW"
+
+    int PUD_OFF "PI_PUD_OFF"
+    int PUD_DOWN "PI_PUD_DOWN"
+    int PUD_UP "PI_PUD_UP"
 
 # Define vars
 cdef int USEC_PER_SEC = 1000000
@@ -97,19 +81,19 @@ cdef int DIR    = 2  # ACTIVE HIGH
 cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
 
 cdef int MOT_A[3]
-MOT_A[EN]       = _RPI_V2_GPIO_P1_03
-MOT_A[STEP]     = _RPI_V2_GPIO_P1_05
-MOT_A[DIR]      = _RPI_V2_GPIO_P1_07
+MOT_A[EN]       = 2  # _RPI_V2_GPIO_P1_03
+MOT_A[STEP]     = 3  # _RPI_V2_GPIO_P1_05
+MOT_A[DIR]      = 4  # _RPI_V2_GPIO_P1_07
 # GND           = GPIO_09
 
 cdef int MOT_B[3]
-MOT_B[EN]       = _RPI_V2_GPIO_P1_08
-MOT_B[STEP]     = _RPI_V2_GPIO_P1_10
-MOT_B[DIR]      = _RPI_V2_GPIO_P1_12
+MOT_B[EN]       = 14  # _RPI_V2_GPIO_P1_08
+MOT_B[STEP]     = 15  # _RPI_V2_GPIO_P1_10
+MOT_B[DIR]      = 18  # _RPI_V2_GPIO_P1_12
 # GND           = GPIO_14
 
 # Laser output
-LAS             = _RPI_V2_GPIO_P1_26  # ACTIVE HIGH
+LAS             = 7  # _RPI_V2_GPIO_P1_26  # ACTIVE HIGH
 
 # All input switches
 cdef int XMIN       = 0
@@ -121,12 +105,12 @@ cdef int[:] list_of_sw_pins = array.array('i', (XMIN, XMAX, YMIN, YMAX,
                                                 SAFE_FEET))
 # Active low
 cdef int SWS[5]
-SWS[XMIN]   = _RPI_V2_GPIO_P1_13
-SWS[XMAX]   = _RPI_V2_GPIO_P1_15
+SWS[XMIN]   = 27  # _RPI_V2_GPIO_P1_13
+SWS[XMAX]   = 22  # _RPI_V2_GPIO_P1_15
 # Vcc (3V3) = GPIO_17
-SWS[YMIN]   = _RPI_V2_GPIO_P1_21
-SWS[YMAX]   = _RPI_V2_GPIO_P1_19  # woops wires
-SWS[SAFE_FEET] = _RPI_V2_GPIO_P1_23  # woops active hi by accident
+SWS[YMIN]   = 9  # _RPI_V2_GPIO_P1_21
+SWS[YMAX]   = 10  # _RPI_V2_GPIO_P1_19  # woops wires
+SWS[SAFE_FEET] = 11  # _RPI_V2_GPIO_P1_23  # woops active hi by accident
 # GND       = GPIO_25
 
 ############### External Interface Functions ##########################
@@ -139,19 +123,19 @@ cpdef int gpio_init():
     """
 
     # Init GPIO
-    if not bcm2835_init():
+    if not gpioInitialise():
         return 1
     # Set output and input pins
     # Outputs
     for outpin in list_of_mot_pins:
-        bcm2835_gpio_fsel(MOT_A[outpin], _GPIO_FSEL_OUTP)
-        bcm2835_gpio_fsel(MOT_B[outpin], _GPIO_FSEL_OUTP)
+        gpioSetMode(MOT_A[outpin], GPIO_OUTPUT)
+        gpioSetMode(MOT_B[outpin], GPIO_OUTPUT)
 
-    bcm2835_gpio_fsel(LAS, _GPIO_FSEL_OUTP)
+    gpioSetMode(LAS, GPIO_OUTPUT)
 
     # Inputs
     for inpin in list_of_sw_pins:
-        bcm2835_gpio_fsel(SWS[inpin], _GPIO_FSEL_INPT)
+        gpioSetMode(SWS[inpin], GPIO_INPUT)
     
     #print "GPIO Initialization successful"
     return 0
@@ -163,7 +147,7 @@ cpdef void gpio_close():
     :return: void
     """
 
-    bcm2835_close()
+    gpioTerminate()
 
 
 cpdef void gpio_test():
@@ -179,14 +163,14 @@ cpdef void gpio_test():
     gettimeofday(&now, NULL)
     while time_diff(then, now) < 5*USEC_PER_SEC:
         for pin in list_of_mot_pins:
-            bcm2835_gpio_set(MOT_A[pin])
-            bcm2835_gpio_set(MOT_B[pin])
-        bcm2835_gpio_set(LAS)
+            gpioWrite(MOT_A[pin], HI)
+            gpioWrite(MOT_B[pin], HI)
+        gpioWrite(LAS, HI)
 
         for pin in list_of_mot_pins:
-            bcm2835_gpio_clr(MOT_A[pin])
-            bcm2835_gpio_clr(MOT_B[pin])
-        bcm2835_gpio_clr(LAS)
+            gpioWrite(MOT_A[pin], LO)
+            gpioWrite(MOT_B[pin], LO)
+        gpioWrite(LAS, LO)
 
 
 cpdef void motor_enable():
@@ -196,8 +180,8 @@ cpdef void motor_enable():
     """
 
     # Active low
-    bcm2835_gpio_clr(MOT_A[EN])
-    bcm2835_gpio_clr(MOT_B[EN])
+    gpioWrite(MOT_A[EN], HI)
+    gpioWrite(MOT_B[EN], HI)
 
 
 cpdef void motor_disable():
@@ -207,8 +191,8 @@ cpdef void motor_disable():
     """
 
     # Active low
-    bcm2835_gpio_set(MOT_A[EN])
-    bcm2835_gpio_set(MOT_B[EN])
+    gpioWrite(MOT_A[EN], LO)
+    gpioWrite(MOT_B[EN], LO)
 
 
 cpdef void las_pulse(double time):
@@ -223,7 +207,7 @@ cpdef void las_pulse(double time):
     :return: void
     """
 
-    bcm2835_gpio_set(LAS)
+    gpioWrite(LAS, HI)
     cdef timeval start, end
     gettimeofday(&start, NULL)
     gettimeofday(&end, NULL)
@@ -231,7 +215,7 @@ cpdef void las_pulse(double time):
         gettimeofday(&end, NULL)
         if read_switches_fast() & (0x1 << SAFE_FEET):
             break
-    bcm2835_gpio_clr(LAS)
+    gpioWrite(LAS, LO)
 
 
 cpdef int read_switches():
@@ -246,7 +230,7 @@ cpdef int read_switches():
     cdef int retval = 0
 
     for pin in list_of_sw_pins:
-        retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
+        retval |= (0 if gpioRead(SWS[pin]) else 1 )<< pin
 
     return retval
 
@@ -258,12 +242,12 @@ cpdef void delay_micros(long us):
     :return: void
     """
 
-    # bcm2835_delayMicroseconds(us)  # don't trust this too much
-    cdef timeval start, end
-    gettimeofday(&start, NULL)
-    gettimeofday(&end, NULL)
-    while time_diff(start, end) < us:
-        gettimeofday(&end, NULL)
+    gpioDelay(us)  # this can return the actual delay time but whatever
+    # cdef timeval start, end
+    # gettimeofday(&start, NULL)
+    # gettimeofday(&end, NULL)
+    # while time_diff(start, end) < us:
+    #     gettimeofday(&end, NULL)
 
 
 cpdef void delay_millis(long ms):
@@ -272,9 +256,9 @@ cpdef void delay_millis(long ms):
     :return: void
     """
 
-    bcm2835_delay(ms)  # whatever timing in ms range
+    gpioDelay(ms*1000)  # whatever timing in ms range
 
-# TODO Try out pigpio library DMA's for timing/motion
+# TODO Change to pigpio library DMA's for timing/motion
 cdef int move_laser(step_list, las_list, time_list):
     """ Perform the laser head step motion loop with precise timings.
 
@@ -311,50 +295,50 @@ cdef int move_laser(step_list, las_list, time_list):
     # cdef int[:] deltaTimes = array.array('i', range(list_len))
     # cdef int[:] opTimes = array.array('i', range(list_len))
 
-    cdef int i = 0
-    while i < list_len:
-        # # Diagnostic
-        # deltaTimes[i] = delta
-
-        # Reset times
-        then.tv_sec, then.tv_usec = now.tv_sec, now.tv_usec
-        delta = 0
-
-        # Set laser
-        bcm2835_gpio_write(LAS, las_arr[i])
-        # bcm2835_gpio_write(LAS, 1 if las_arr[i] else 0)  # 8b power settings
-
-        # Move steppers
-        bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
-        bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
-
-        if step_arrA[i] != 0:
-            bcm2835_gpio_set(MOT_A[STEP])
-        if step_arrB[i] != 0:
-            bcm2835_gpio_set(MOT_B[STEP])
-        retval = read_switches_fast()  # Read switches in the middle of a step
-                                       # to prolong the width of a step pulse
-        bcm2835_gpio_clr(MOT_A[STEP])
-        bcm2835_gpio_clr(MOT_B[STEP])
-
-        #Check switches, quit if triggered
-        if retval:
-            # print "Switches triggered: " + bin(retval)
-            break
-
-        # # Diagnostic
-        # gettimeofday(&now, NULL)
-        # delta = time_diff(then, now)
-        # opTimes[i] = delta
-
-        # Time idle
-        while delta < time_arr[i]:
-            gettimeofday(&now, NULL)
-            delta = time_diff(then, now)
-
-        i += 1 #increment for loop
-
-    bcm2835_gpio_clr(LAS)
+    # cdef int i = 0
+    # while i < list_len:
+    #     # # Diagnostic
+    #     # deltaTimes[i] = delta
+    #
+    #     # Reset times
+    #     then.tv_sec, then.tv_usec = now.tv_sec, now.tv_usec
+    #     delta = 0
+    #
+    #     # Set laser
+    #     bcm2835_gpio_write(LAS, las_arr[i])
+    #     # bcm2835_gpio_write(LAS, 1 if las_arr[i] else 0)  # 8b power settings
+    #
+    #     # Move steppers
+    #     bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
+    #     bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
+    #
+    #     if step_arrA[i] != 0:
+    #         bcm2835_gpio_set(MOT_A[STEP])
+    #     if step_arrB[i] != 0:
+    #         bcm2835_gpio_set(MOT_B[STEP])
+    #     retval = read_switches_fast()  # Read switches in the middle of a step
+    #                                    # to prolong the width of a step pulse
+    #     bcm2835_gpio_clr(MOT_A[STEP])
+    #     bcm2835_gpio_clr(MOT_B[STEP])
+    #
+    #     #Check switches, quit if triggered
+    #     if retval:
+    #         # print "Switches triggered: " + bin(retval)
+    #         break
+    #
+    #     # # Diagnostic
+    #     # gettimeofday(&now, NULL)
+    #     # delta = time_diff(then, now)
+    #     # opTimes[i] = delta
+    #
+    #     # Time idle
+    #     while delta < time_arr[i]:
+    #         gettimeofday(&now, NULL)
+    #         delta = time_diff(then, now)
+    #
+    #     i += 1 #increment for loop
+    #
+    # bcm2835_gpio_clr(LAS)
 
     # # Diagnostic
     # errs = [deltaTimes[i+1] - time_list[i] for i in range(list_len-1)]
@@ -397,6 +381,6 @@ cdef int read_switches_fast():
     cdef int retval = 0
 
     for pin in list_of_sw_pins:
-        retval |= (0 if bcm2835_gpio_lev(SWS[pin]) else 1 )<< pin
+        retval |= (0 if gpioRead(SWS[pin]) else 1 )<< pin
 
     return retval
