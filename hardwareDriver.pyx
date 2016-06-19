@@ -268,7 +268,7 @@ cpdef void delay_micros(long us):
 
 cpdef void delay_millis(long ms):
     """ Wait for X milliseconds.
-    :param ms: Time in millisecodns to wait
+    :param ms: Time in milliseconds to wait
     :return: void
     """
 
@@ -280,8 +280,10 @@ cdef int move_laser(step_list, las_list, time_list):
 
     :param step_list: List of [a,b] steps to take each increment. 0 or +/-1.
     :type: list[n][2] <integer>
+
     :param las_list: List of laser on/off value. 0 or 1.
     :type: list[n] <integer>
+
     :param time_list: List of times (us) to spend at each position
     :type: list[n] <integer>
 

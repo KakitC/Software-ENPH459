@@ -27,12 +27,12 @@ class HardwareManager(object):
         """
 
         # Default vals and settings
-        self.step_cal = 10  # steps/mm
-        self.cut_spd = 3  # mm/s
-        self.travel_spd = 100  # mm/s
-        self.bed_xmax = 250  # mm
-        self.bed_ymax = 280  # mm
-        self.skew = 0  # degrees
+        self.step_cal = 10      # steps/mm
+        self.cut_spd = 3        # mm/s
+        self.travel_spd = 100   # mm/s
+        self.bed_xmax = 250     # mm
+        self.bed_ymax = 280     # mm
+        self.skew = 0           # degrees
 
         self.las_mask = np.array([[255]])  # 255: White - PIL Image 0-255 vals
         self.las_dpmm = 0.00000001  # ~0 Dots Per mm, 1 pixel for whole space
@@ -69,6 +69,7 @@ class HardwareManager(object):
 
     def get_settings(self):
         """ Retrieve a dictionary containing all HardwareManager settings
+
         :return: Dictionary of properties
         :rtype: dict
         """
@@ -89,8 +90,10 @@ class HardwareManager(object):
 
         :param img: Laser bitmask, 0
         :type: PIL.Image.Image
+
         :param scale: Dots-Per-mm of the image
         :type: double
+
         :return: void
         """
         self.las_mask = np.array(img)

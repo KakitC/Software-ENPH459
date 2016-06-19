@@ -6,9 +6,11 @@ Intended to be a drop-in replacement for the original hardwareDriver module.
 """
 __author__ = 'Kakit'
 
-import math
 from cpython cimport array
+# import array
+from math import *
 import pigpio as pig
+from cymem.cymem cimport Pool
 
 # Define external functions
 cdef extern from "sys/time.h":
@@ -23,6 +25,11 @@ cdef extern from "pigpio.h":
     ctypedef int uint32_t
     ctypedef int unsigned
 
+    ctypedef struct gpioPulse_t:
+        uint32_t gpioOn
+        uint32_t gpioOff
+        uint32_t usDelay
+
     # GPIO init functions
     int gpioInitialise()
     int gpioTerminate()
@@ -33,43 +40,53 @@ cdef extern from "pigpio.h":
     int gpioRead(unsigned gpio)  # Read pin
     int gpioWrite(unsigned gpio, unsigned level)  # Sets pin
     int gpioSetPullUpDown(unsigned gpio, unsigned pud)  # Sets pull up/down
-    # missing set/clr functions, set/clr/write multi
 
-    # Interrupt register functions
-    uint8_t bcm2835_gpio_eds(uint8_t pin) # Checks if pin detects edge event
-    uint8_t bcm2835_gpio_set_eds(uint8_t pin) # Writes 1 to clear edge event
-    void bcm2835_gpio_ren(uint8_t pin) # Enable Rising edge detect event
-    void bcm2835_gpio_clr_ren(uint8_t pin) # Disable Rising edge detect event
-    void bcm2835_gpio_fen(uint8_t pin) # Enable Falling edge detect event
-    void bcm2835_gpio_clr_fen(uint8_t pin) # Disable Falling edge detect event
-    # Not included: Async gpio_aren/afen functions
+    # Multi pin functions; Should only be needing pins 0-31
+    int gpioRead_Bits_0_31()
+    int gpioRead_Bits_32_53()
+    int gpioWrite_Bits_0_31_Clear(uint32_t bits)
+    int gpioWrite_Bits_32_53_Clear(uint32_t bits)
+    int gpioWrite_Bits_0_31_Set(uint32_t bits)
+    int gpioWrite_Bits_32_53_Set(uint32_t bits)
 
-    void bcm2835_gpio_hen(uint8_t pin) # Enable High detect event
-    void bcm2835_gpio_clr_hen(uint8_t pin) # Disable High detect event
-    void bcm2835_gpio_len(uint8_t pin) # Enable Low detect event
-    void bcm2835_gpio_clr_len(uint8_t pin) # Disable Low detect event
+    # vs bcm2835: missing interrupts
+
+    # GPIO Wave functions
+    int gpioWaveClear()
+    int gpioWaveAddNew()
+    int gpioWaveAddGeneric(unsigned numPulses, gpioPulse_t *pulses)
+    int gpioWaveCreate()
+    int gpioWaveGetPulses()
+    int gpioWaveGetCbs()
+    int gpioWaveGetMicros()
+
+    # Not included: SPI functions, I2C, serial
+    # pigpio uses BCM pin numbering, not physical
 
     # Delays who knows how long lol
     uint32_t gpioDelay(uint32_t micros)  # delay micros
 
-    # Not included: SPI functions, I2C, serial
-
-    # pigpio uses BCM pin numbering, not physical
-
-    # Port function select modes for bcm2835_gpio_fsel()
-    int GPIO_INPUT "PI_INPUT "# = 0b000,   ///< Input
-    int GPIO_OUTPUT "PI_OUTPUT" # = 0b001,   ///< Output
-    # Other definitions
-    int HI "PI_HIGH"
-    int LO "PI_LOW"
-
-    int PUD_OFF "PI_PUD_OFF"
-    int PUD_DOWN "PI_PUD_DOWN"
-    int PUD_UP "PI_PUD_UP"
+    # # Port function select modes for bcm2835_gpio_fsel()
+    # int GPIO_INPUT "PI_INPUT "# = 0b000,   ///< Input
+    # int GPIO_OUTPUT "PI_OUTPUT" # = 0b001,   ///< Output
+    # # Other definitions
+    # int HI "PI_HIGH"
+    # int LO "PI_LOW"
+    #
+    # int PUD_OFF "PI_PUD_OFF"
+    # int PUD_DOWN "PI_PUD_DOWN"
+    # int PUD_UP "PI_PUD_UP"
 
 # Define vars
 cdef int USEC_PER_SEC = 1000000
+cdef int GPIO_INPUT = 0
+cdef int GPIO_OUTPUT = 1
 
+cdef int PUD_OFF = 0
+cdef int PUD_DOW = 1
+cdef int PUD_UP = 2
+cdef int HI = 1
+cdef int LO = 0
 
 ############# PIN DEFINITIONS #############
 
@@ -78,15 +95,15 @@ cdef int USEC_PER_SEC = 1000000
 cdef int EN     = 0  # ACTIVE LOW
 cdef int STEP   = 1  # ACTIVE HIGH
 cdef int DIR    = 2  # ACTIVE HIGH
-cdef int[:] list_of_mot_pins = array.array('i', (EN, STEP, DIR))
+cdef int[:] list_of_mot_pins = array.array('i', [EN, STEP, DIR])
 
-cdef int MOT_A[3]
+cdef int[:] MOT_A = array.array('i', range(3))
 MOT_A[EN]       = 2  # _RPI_V2_GPIO_P1_03
 MOT_A[STEP]     = 3  # _RPI_V2_GPIO_P1_05
 MOT_A[DIR]      = 4  # _RPI_V2_GPIO_P1_07
 # GND           = GPIO_09
 
-cdef int MOT_B[3]
+cdef int[:] MOT_B = array.array('i', range(3))
 MOT_B[EN]       = 14  # _RPI_V2_GPIO_P1_08
 MOT_B[STEP]     = 15  # _RPI_V2_GPIO_P1_10
 MOT_B[DIR]      = 18  # _RPI_V2_GPIO_P1_12
@@ -94,6 +111,18 @@ MOT_B[DIR]      = 18  # _RPI_V2_GPIO_P1_12
 
 # Laser output
 LAS             = 7  # _RPI_V2_GPIO_P1_26  # ACTIVE HIGH
+
+# Pin number masks
+cdef int motor_pin_mask = 0
+for pin in list_of_mot_pins:
+    assert MOT_A[pin] < 32  # All pins should be 0-31 for multi pin set/clear
+    assert MOT_B[pin] < 32
+    motor_pin_mask |= 1 << MOT_A[pin]
+    motor_pin_mask |= 1 << MOT_B[pin]
+
+cdef int output_pin_mask = motor_pin_mask
+assert LAS < 32
+output_pin_mask |= 1 << LAS
 
 # All input switches
 cdef int XMIN       = 0
@@ -104,7 +133,7 @@ cdef int SAFE_FEET  = 4
 cdef int[:] list_of_sw_pins = array.array('i', (XMIN, XMAX, YMIN, YMAX,
                                                 SAFE_FEET))
 # Active low
-cdef int SWS[5]
+cdef int[:] SWS = array.array('i', range(5))
 SWS[XMIN]   = 27  # _RPI_V2_GPIO_P1_13
 SWS[XMAX]   = 22  # _RPI_V2_GPIO_P1_15
 # Vcc (3V3) = GPIO_17
@@ -112,6 +141,11 @@ SWS[YMIN]   = 9  # _RPI_V2_GPIO_P1_21
 SWS[YMAX]   = 10  # _RPI_V2_GPIO_P1_19  # woops wires
 SWS[SAFE_FEET] = 11  # _RPI_V2_GPIO_P1_23  # woops active hi by accident
 # GND       = GPIO_25
+
+cdef int switch_pin_mask = 0
+for pin in list_of_sw_pins:
+    switch_pin_mask |= 1 << SWS[pin]
+# 0, 1, 5, 6, 12, 13, 16, 19, 26, 20, 21 unused for sure
 
 ############### External Interface Functions ##########################
 
@@ -151,7 +185,8 @@ cpdef void gpio_close():
 
 
 cpdef void gpio_test():
-    """ Toggles all mot pins at max speed for 5s
+    """ Toggles all mot pins rapidly for 5s. Don't call this while things are
+    connected to the pins!
 
     :return: void
     """
@@ -161,16 +196,10 @@ cpdef void gpio_test():
     cdef timeval now, then
     gettimeofday(&then, NULL)
     gettimeofday(&now, NULL)
+    # TODO switch to multi set/clear function
     while time_diff(then, now) < 5*USEC_PER_SEC:
-        for pin in list_of_mot_pins:
-            gpioWrite(MOT_A[pin], HI)
-            gpioWrite(MOT_B[pin], HI)
-        gpioWrite(LAS, HI)
-
-        for pin in list_of_mot_pins:
-            gpioWrite(MOT_A[pin], LO)
-            gpioWrite(MOT_B[pin], LO)
-        gpioWrite(LAS, LO)
+        gpioWrite_Bits_0_31_Set(output_pin_mask)
+        gpioWrite_Bits_0_31_Clear(output_pin_mask)
 
 
 cpdef void motor_enable():
@@ -211,6 +240,7 @@ cpdef void las_pulse(double time):
     cdef timeval start, end
     gettimeofday(&start, NULL)
     gettimeofday(&end, NULL)
+    # TODO Change to DMA wave based pulse
     while time_diff(start, end) < time * USEC_PER_SEC:
         gettimeofday(&end, NULL)
         if read_switches_fast() & (0x1 << SAFE_FEET):
@@ -228,7 +258,7 @@ cpdef int read_switches():
     :rtype: int
     """
     cdef int retval = 0
-
+    cdef int mask = 0
     for pin in list_of_sw_pins:
         retval |= (0 if gpioRead(SWS[pin]) else 1 )<< pin
 
@@ -259,6 +289,7 @@ cpdef void delay_millis(long ms):
     gpioDelay(ms*1000)  # whatever timing in ms range
 
 # TODO Change to pigpio library DMA's for timing/motion
+# TODO Check return values on functions to check for errors
 cdef int move_laser(step_list, las_list, time_list):
     """ Perform the laser head step motion loop with precise timings.
 
@@ -290,6 +321,9 @@ cdef int move_laser(step_list, las_list, time_list):
 
     gettimeofday(&then, NULL)
     gettimeofday(&now, NULL)
+
+    pulseList = []
+#    cdef gpioPulse_t[:] pulseArray =
 
     # # Diagnostics
     # cdef int[:] deltaTimes = array.array('i', range(list_len))

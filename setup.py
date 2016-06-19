@@ -13,6 +13,11 @@ extensions = [
               libraries=["bcm2835"]
               )
     ,
+    # Extension("hardwareDriverPigpio",
+    #           ["hardwareDriverPigpio.pyx"],
+    #           libraries=["pigpio", "rt"]
+    #           )
+    # ,
     Extension("HManHelper",
               ["HManHelper.pyx"]
               )

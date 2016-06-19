@@ -5,137 +5,154 @@ build Linux libraries
 """
 from cpython cimport array
 # import array
-#
-# cdef array.array a = array.array('i', [i for i in range(5)])
-# cdef array.array b = array.array('i', [i for i in range(5)])
-# for i in range(5):
-#     print a.data.as_ints[i]
-#     print b.data.as_ints[i]
-
 from math import *
-USEC_PER_SEC = 1000000
-############################# INTERNAL FUNCTIONS ############################
-cpdef _gen_step_list(int a_delta, int b_delta):
-    """ Create a list of A/B steps from X/Y coordinates and step size.
+import pigpio as pig
+from cymem.cymem cimport Pool
 
-    Uses Bresenhem line rasterization algorithm.
+# Define external functions
+cdef extern from "sys/time.h":
+    struct timeval:
+        int tv_sec
+        int tv_usec
+    int gettimeofday(timeval *timer, void *)
 
-    :param a_delta: Number of steps to take on A axis
-    :type: int
-    :param b_delta: Number of steps to take on B axis
-    :type: int
-    :return: list of A/B steps (+/- 1 or 0)
-    :rtype: list[n][2]
-    """
+# Import pigpio c lib functions and vars
+cdef extern from "pigpio.h":
+    ctypedef int uint8_t
+    ctypedef int uint32_t
+    ctypedef int unsigned
 
-    # Divide into quadrants by reversing directions as needed
-    cdef bint a_flip_flag = False
-    cdef bint b_flip_flag = False
-    cdef bint ab_flip_flag = False
+    ctypedef struct gpioPulse_t:
+        uint32_t gpioOn
+        uint32_t gpioOff
+        uint32_t usDelay
 
-    if a_delta < 0:
-        a_delta = -a_delta
-        a_flip_flag = True
-    if b_delta < 0:
-        b_delta = -b_delta
-        b_flip_flag = True
+    # GPIO init functions
+    int gpioInitialise()
+    int gpioTerminate()
 
-    # Divide into octants by swapping so A > B
-    if b_delta > a_delta:
-        a_delta, b_delta = b_delta, a_delta # yep, that's safe /s
-        ab_flip_flag = True
+    # GPIO functions
+    int gpioSetMode(unsigned gpio, unsigned mode) # Set pin I or O
+    int gpioGetMode(unsigned gpio)  # Reads GPIO mode
+    int gpioRead(unsigned gpio)  # Read pin
+    int gpioWrite(unsigned gpio, unsigned level)  # Sets pin
+    int gpioSetPullUpDown(unsigned gpio, unsigned pud)  # Sets pull up/down
+    # vs bcm2835: missing set/clr functions, set/clr/write multi, interrupts
 
-    # Generate step list for line in first octant. Bresenham's algo here
-    # TODO Optimize gen_step_list by using C arrays
-    step_list = []
-    cdef int a_now = 0
-    cdef int error = b_delta - a_delta
-    while a_now < a_delta:
-        ab_list = [1,0]
-        if error >= 0:
-            ab_list[1] = 1
-            error -= a_delta
-        a_now += 1
-        error += b_delta
-        step_list.append(ab_list)
+    # GPIO Wave functions
+    int gpioWaveClear()
+    int gpioWaveAddNew()
+    int gpioWaveAddGeneric(unsigned numPulses, gpioPulse_t *pulses)
+    int gpioWaveCreate()
+    int gpioWaveGetPulses()
+    int gpioWaveGetCbs()
+    int gpioWaveGetMicros()
 
-    # Reverse octants, quadrants
-    if ab_flip_flag:
-        step_list = [[_[1], _[0]] for _ in step_list]
+    # Not included: SPI functions, I2C, serial
+    # pigpio uses BCM pin numbering, not physical
 
-    if a_flip_flag:
-        step_list = [[-_[0], _[1]] for _ in step_list]
-    if b_flip_flag:
-        step_list = [[_[0], -_[1]] for _ in step_list]
+    # Delays who knows how long lol
+    uint32_t gpioDelay(uint32_t micros)  # delay micros
 
-    return step_list
+    # # Port function select modes for bcm2835_gpio_fsel()
+    # int GPIO_INPUT "PI_INPUT "# = 0b000,   ///< Input
+    # int GPIO_OUTPUT "PI_OUTPUT" # = 0b001,   ///< Output
+    # # Other definitions
+    # int HI "PI_HIGH"
+    # int LO "PI_LOW"
+    #
+    # int PUD_OFF "PI_PUD_OFF"
+    # int PUD_DOWN "PI_PUD_DOWN"
+    # int PUD_UP "PI_PUD_UP"
 
+# Define vars
+cdef int USEC_PER_SEC = 1000000
+cdef int GPIO_INPUT = 0
+cdef int GPIO_OUTPUT = 1
 
-cpdef _gen_las_list(hman, step_list, setting="default"):
-    """ Create a list of 1-bit laser power (on/off) for cutting path.
+cdef int PUD_OFF = 0
+cdef int PUD_DOW = 1
+cdef int PUD_UP = 2
 
-    Has options for generating stock las_list's quickly. Currently supports:
-    "blank" - All white, no cut
-    "dark" - All black, cut everything
-    "default" - Compares projected position against laser darkfield bitmask
+############# PIN DEFINITIONS #############
 
-    :param step_list: List of A/B steps to take for cut operation
-    :type: list[n][2] of int(+/-1 or 0)
-    :param setting: las_list generation settings.
-    :return: laser cutting bit list
-    :rtype: list[n] of [0 or 1]
-    """
+# Motor outputs
+# MOT_N is an array, with indices enums EN, STEP, DIR
+cdef int EN     = 0  # ACTIVE LOW
+cdef int STEP   = 1  # ACTIVE HIGH
+cdef int DIR    = 2  # ACTIVE HIGH
+cdef int[:] list_of_mot_pins = array.array('i', [EN, STEP, DIR])
 
-    if setting == "blank":
-        return [0 for i in range(len(step_list))]
-    if setting == "dark":
-        return [1 for i in range(len(step_list))]
+cdef int[:] MOT_A = array.array('i', range(3))
+MOT_A[EN]       = 2  # _RPI_V2_GPIO_P1_03
+MOT_A[STEP]     = 3  # _RPI_V2_GPIO_P1_05
+MOT_A[DIR]      = 4  # _RPI_V2_GPIO_P1_07
+# GND           = GPIO_09
 
-    cdef double x_now = hman.x
-    cdef double y_now = hman.y
-    # cdef int mask_xsize = len(hman.las_mask)
-    # cdef int mask_ysize = len(hman.las_mask[0])
-    cdef int mask_xsize = hman.las_mask.shape[0]
-    cdef int mask_ysize = hman.las_mask.shape[1]
-    cdef int x_px, y_px
-    # TODO Cast las_mask as a C array for speed and compatibility
-    # las_mask currently a numpy array
+cdef int[:] MOT_B = array.array('i', range(3))
+MOT_B[EN]       = 14  # _RPI_V2_GPIO_P1_08
+MOT_B[STEP]     = 15  # _RPI_V2_GPIO_P1_10
+MOT_B[DIR]      = 18  # _RPI_V2_GPIO_P1_12
+# GND           = GPIO_14
 
-    las_list = []
+# Laser output
+LAS             = 7  # _RPI_V2_GPIO_P1_26  # ACTIVE HIGH
 
-    for i in step_list:
-        x_now += 0.5*(i[0] + i[1]) / hman.step_cal
-        y_now += 0.5*(i[0] - i[1]) / hman.step_cal
+# All input switches
+cdef int XMIN       = 0
+cdef int XMAX       = 1
+cdef int YMIN       = 2
+cdef int YMAX       = 3
+cdef int SAFE_FEET  = 4
+cdef int[:] list_of_sw_pins = array.array('i', (XMIN, XMAX, YMIN, YMAX,
+                                                SAFE_FEET))
+# Active low
+cdef int[:] SWS = array.array('i', range(5))
+SWS[XMIN]   = 27  # _RPI_V2_GPIO_P1_13
+SWS[XMAX]   = 22  # _RPI_V2_GPIO_P1_15
+# Vcc (3V3) = GPIO_17
+SWS[YMIN]   = 9  # _RPI_V2_GPIO_P1_21
+SWS[YMAX]   = 10  # _RPI_V2_GPIO_P1_19  # woops wires
+SWS[SAFE_FEET] = 11  # _RPI_V2_GPIO_P1_23  # woops active hi by accident
+# GND       = GPIO_25
 
-        # Sets laser power to 0 if mask is 255 (blank = don't cut)
-        x_px = int(x_now * hman.las_dpmm)
-        y_px = int(y_now * hman.las_dpmm)
+# 0, 1, 5, 6, 12, 13, 16, 19, 26, 20, 21 unused for sure
 
-        # TODO account for out-of-bounds errors
-        if x_px >= hman.las_mask.shape[1] or y_px >= hman.las_mask.shape[0]:
-            las_list.append(0)
-            continue
+def testScript():
+    if not gpioInitialise():
+        raise IOError
 
-        las_list.append(1 if hman.las_mask[y_px][x_px] != 255 else 0)
-        # las_list.append(255-hman.las_mask[x_px][y_px]) # 8b power settings
-        # TODO do 8 bit laser power settings and gamma curve
+    gpioSetMode(0, GPIO_OUTPUT)
+    gpioSetMode(1, GPIO_OUTPUT)
 
-    return las_list
+    cdef gpioPulse_t *pulse1
+    mem = Pool()
+    pulse1 = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
+    pulse1.usDelay = 500000
+    pulse1.gpioOn = 1 << 1
+    pulse1.gpioOff = 1 << 0
 
+    cdef gpioPulse_t *pulse2 = pulse1
+    # cdef int[:] pulse1 = array.array('i', [1 << 1, 1 << 0, 500000])
+    # cdef int[:] pulse2 = array.array('i', [1 << 0, 1 << 1, 500000])
+    #
+    # cdef int[:,:] pulses = array.array('i', [[1 << 1, 1 << 0, 500000],
+    #                                         [1 << 0, 1 << 1, 500000]])
 
+    print "pulse1.usDelay", pulse1.usDelay
+    print "pulse2.usDelay", pulse2.usDelay
 
-cpdef _gen_time_list(hman, las_list):
-    """ Create a list of times to stay at each step for laser cutting
-    or moving.
+    gpioWaveAddGeneric(2, [pulse1[0], pulse2[0]])
+    # waveid = gpioWaveCreate()
+    # print waveid
+    print "gpioWaveGetMicros", gpioWaveGetMicros()
 
-    :param las_list: laser cutting bit list
-    :type: list[n] of 0 or 1
-    :return: List of times
-    :rtype: list[n] <integer>
-    """
+    pulse1.usDelay = 250000
+    print "pulse1.usDelay", pulse1.usDelay
+    print "pulse2.usDelay", pulse2.usDelay
+    print "gpioWaveGetMicros", gpioWaveGetMicros()
 
-    # TODO do 8 bit timings
-    # TODO account for diagonal travel being faster than orthogonal
-    return [int(USEC_PER_SEC / (hman.cut_spd * hman.step_cal)) if i
-            else int(USEC_PER_SEC / (hman.travel_spd * hman.step_cal))
-            for i in las_list]
+    print EN
+    print MOT_A[EN]
+
+    gpioTerminate()
