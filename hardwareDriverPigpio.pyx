@@ -34,6 +34,8 @@ cdef extern from "pigpio.h":
     int gpioInitialise()
     int gpioTerminate()
 
+    unsigned gpioVersion()  # version number
+
     # GPIO functions
     int gpioSetMode(unsigned gpio, unsigned mode) # Set pin I or O
     int gpioGetMode(unsigned gpio)  # Reads GPIO mode
@@ -56,12 +58,25 @@ cdef extern from "pigpio.h":
     int gpioWaveAddNew()
     int gpioWaveAddGeneric(unsigned numPulses, gpioPulse_t *pulses)
     int gpioWaveCreate()
+    int gpioWaveDelete(unsigned wave_id)
     int gpioWaveGetPulses()
+    int gpioWaveGetHighPulses()
+    int gpioWaveGetMaxPulses()
     int gpioWaveGetCbs()
+    int gpioWaveGetHighCbs()
+    int gpioWaveGetMaxCbs()
     int gpioWaveGetMicros()
+    int gpioWaveGetHighMicros()
+    int gpioWaveGetMaxMicros()
 
     # Not included: SPI functions, I2C, serial
-    # pigpio uses BCM pin numbering, not physical
+
+    # GPIO Wave sending functions
+    int gpioWaveTxSend(unsigned wave_id, unsigned wave_mode)
+    int gpioWaveChain(char *buf, unsigned bufSize)
+    int gpioWaveTxAt()
+    int gpioWaveTxBusy()
+    int gpioWaveTxStop()
 
     # Delays who knows how long lol
     uint32_t gpioDelay(uint32_t micros)  # delay micros
@@ -88,7 +103,13 @@ cdef int PUD_UP = 2
 cdef int HI = 1
 cdef int LO = 0
 
+cdef int PI_WAVE_MODE_ONE_SHOT      = 0
+cdef int PI_WAVE_MODE_REPEAT        = 1
+cdef int PI_WAVE_MODE_ONE_SHOT_SYNC = 2
+cdef int PI_WAVE_MODE_REPEAT_SYNC   = 3
+
 ############# PIN DEFINITIONS #############
+# pigpio uses BCM pin numbering, not physical
 
 # Motor outputs
 # MOT_N is an array, with indices enums EN, STEP, DIR
@@ -142,8 +163,12 @@ SWS[YMAX]   = 10  # _RPI_V2_GPIO_P1_19  # woops wires
 SWS[SAFE_FEET] = 11  # _RPI_V2_GPIO_P1_23  # woops active hi by accident
 # GND       = GPIO_25
 
+# Note: In future use, UI buttons are distinct from switches. Switches/sw/sws
+# are hardware interrupt safety features, buttons/butt/butts are non-critical
+# and not polled all the time.
 cdef int switch_pin_mask = 0
 for pin in list_of_sw_pins:
+    assert pin < 32
     switch_pin_mask |= 1 << SWS[pin]
 # 0, 1, 5, 6, 12, 13, 16, 19, 26, 20, 21 unused for sure
 
@@ -166,6 +191,7 @@ cpdef int gpio_init():
         gpioSetMode(MOT_B[outpin], GPIO_OUTPUT)
 
     gpioSetMode(LAS, GPIO_OUTPUT)
+    gpioWrite_Bits_0_31_Clear(output_pin_mask)
 
     # Inputs
     for inpin in list_of_sw_pins:
@@ -181,11 +207,14 @@ cpdef void gpio_close():
     :return: void
     """
 
+    # Clear all pins
+    gpioWrite_Bits_0_31_Clear(output_pin_mask)
+
     gpioTerminate()
 
 
 cpdef void gpio_test():
-    """ Toggles all mot pins rapidly for 5s. Don't call this while things are
+    """ Toggles all mot pins rapidly for 5s. DON'T call this while things are
     connected to the pins!
 
     :return: void
@@ -196,7 +225,6 @@ cpdef void gpio_test():
     cdef timeval now, then
     gettimeofday(&then, NULL)
     gettimeofday(&now, NULL)
-    # TODO switch to multi set/clear function
     while time_diff(then, now) < 5*USEC_PER_SEC:
         gpioWrite_Bits_0_31_Set(output_pin_mask)
         gpioWrite_Bits_0_31_Clear(output_pin_mask)
@@ -257,11 +285,13 @@ cpdef int read_switches():
             (i.e. 0b01001 => 9: YMAX, XMIN)
     :rtype: int
     """
-    cdef int retval = 0
-    cdef int mask = 0
-    for pin in list_of_sw_pins:
-        retval |= (0 if gpioRead(SWS[pin]) else 1 )<< pin
 
+    cdef int retval = 0
+    cdef int gpio_bits = 0
+    gpio_bits = gpioRead_Bits_0_31()
+    # Get input pin from 32b to enumerated position: 1 << (0 to 5)
+    for pin in list_of_sw_pins:
+        retval += (gpio_bits && (1 << SWS[pin])) << pin
     return retval
 
 
@@ -315,106 +345,87 @@ cdef int move_laser(step_list, las_list, time_list):
     cdef int[:] las_arr = array.array('i', las_list)
     cdef int[:] time_arr = array.array('i', time_list)
 
-    cdef timeval then, now
-    cdef int delta = 0
+    # Memory alloc
+    cdef gpioPulse_t *delay_pulse
+    cdef gpioPulse_t *step_pulse1
+    cdef gpioPulse_t *step_pulse2
+    mem = Pool()
+    delay_pulse = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
+    step_pulse1 = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
+    step_pulse2 = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
+
+    # Build gpioWave
+    cdef int i = 0
+    cdef delay = 0
+    delay_pulse.gpioOff = 0
+    delay_pulse.gpioOn = 0
+    while i < len(las_list):
+        delay_pulse.usDelay = delay
+
+        # Build step pulses: (EN, DIR, STEP)x2, LAS
+        step_pulse1.gpioOn = (1 << MOT_A[EN]) | (1 << MOT_B[EN]) \
+                             | ((step_arrA[i] > 0) << MOT_A[DIR]) \
+                             | ((step_arrB[i] > 0) << MOT_B[DIR]) \
+                             | ((step_arrA[i] != 0) << MOT_A[STEP]) \
+                             | ((step_arrB[i] != 0) << MOT_B[STEP]) \
+                             | ((las_arr[i] != 0) << LAS)
+        step_pulse1.gpioOff = ((step_arrA[i] < 0) << MOT_A[DIR]) \
+                             | ((step_arrB[i] < 0) << MOT_B[DIR]) \
+                             | ((las_arr[i] == 0) << LAS)
+        step_pulse1.usDelay = int(time_arr[i] / 2)
+
+        step_pulse2.gpioOn = step_pulse1.gpioOn
+        step_pulse2.gpioOn &= ~((1 << MOT_A[STEP]) | (1 << MOT_B[STEP]))
+        step_pulse2.gpioOff = step_pulse1.gpioOff
+        step_pulse2.gpioOff &= (1 << MOT_A[STEP]) | (1 << MOT_B[STEP])
+        step_pulse2.usDelay = time_arr[i] - step_pulse1.usDelay
+
+        gpioWaveAddGeneric(3, [delay_pulse[0], step_pulse1[0], step_pulse2[0]])
+
+        delay += time_arr[i]
+        i += 1
+
+    delay_pulse.usDelay = delay
+    step_pulse1.gpioOn = (1 << MOT_A[EN]) | (1 << MOT_B[EN])  # just in case
+    step_pulse1.gpioOff =  (1 << LAS)
+
+    cdef int wave_id = gpioWaveCreate()
+    # TODO Check with gpioWaveTxBusy if there's a wave already going
+    #gpioWaveTxSend(wave_id, PI_WAVE_MODE_ONE_SHOT)
+
+    # Poll switches
+    # If switch was hit: get switch state, stop current operation, stop laser
     cdef int retval = 0
+    while gpioWaveTxBusy():
+        if read_switches_fast():
+            retval = read_switches()
+            gpioWaveTxStop()
+            gpioWrite(LAS, LO)
+            # has a chance of stopping halfway through a step
+            gpioWrite(MOT_A[STEP], LO)
+            gpioWrite(MOT_B[STEP], LO)
+            break
 
-    gettimeofday(&then, NULL)
-    gettimeofday(&now, NULL)
-
-    pulseList = []
-#    cdef gpioPulse_t[:] pulseArray =
-
-    # # Diagnostics
-    # cdef int[:] deltaTimes = array.array('i', range(list_len))
-    # cdef int[:] opTimes = array.array('i', range(list_len))
-
-    # cdef int i = 0
-    # while i < list_len:
-    #     # # Diagnostic
-    #     # deltaTimes[i] = delta
-    #
-    #     # Reset times
-    #     then.tv_sec, then.tv_usec = now.tv_sec, now.tv_usec
-    #     delta = 0
-    #
-    #     # Set laser
-    #     bcm2835_gpio_write(LAS, las_arr[i])
-    #     # bcm2835_gpio_write(LAS, 1 if las_arr[i] else 0)  # 8b power settings
-    #
-    #     # Move steppers
-    #     bcm2835_gpio_write(MOT_A[DIR], step_arrA[i] > 0)
-    #     bcm2835_gpio_write(MOT_B[DIR], step_arrB[i] > 0)
-    #
-    #     if step_arrA[i] != 0:
-    #         bcm2835_gpio_set(MOT_A[STEP])
-    #     if step_arrB[i] != 0:
-    #         bcm2835_gpio_set(MOT_B[STEP])
-    #     retval = read_switches_fast()  # Read switches in the middle of a step
-    #                                    # to prolong the width of a step pulse
-    #     bcm2835_gpio_clr(MOT_A[STEP])
-    #     bcm2835_gpio_clr(MOT_B[STEP])
-    #
-    #     #Check switches, quit if triggered
-    #     if retval:
-    #         # print "Switches triggered: " + bin(retval)
-    #         break
-    #
-    #     # # Diagnostic
-    #     # gettimeofday(&now, NULL)
-    #     # delta = time_diff(then, now)
-    #     # opTimes[i] = delta
-    #
-    #     # Time idle
-    #     while delta < time_arr[i]:
-    #         gettimeofday(&now, NULL)
-    #         delta = time_diff(then, now)
-    #
-    #     i += 1 #increment for loop
-    #
-    # bcm2835_gpio_clr(LAS)
-
-    # # Diagnostic
-    # errs = [deltaTimes[i+1] - time_list[i] for i in range(list_len-1)]
-    # meanErr = sum(errs) / float(len(errs))
-    # maxErr = max(errs)
-    # minErr = min(errs)
-    # std_dev = math.sqrt(sum([(x - meanErr)*(x - meanErr) for x
-    #                          in errs]) / float(len(errs)))
-    #
-    # mean_opTime = sum(opTimes) / list_len
-    # std_dev_opTime = math.sqrt(sum([(x - mean_opTime)**2 for x in opTimes])
-    #                     / float(list_len))
-    # max_opTime = max(opTimes)
-    # min_opTime = min(opTimes)
-    #
-    # print "meanErr: {}, maxErr: {}, minErr: {}, std_dev: {}".format(
-    #     meanErr, maxErr, minErr, std_dev)
-    # print "mean_opTime: {}, max_opTime: {}, min_opTime: {}, std_dev_opTime: {}"\
-    #     .format(mean_opTime, max_opTime, min_opTime, std_dev_opTime)
+    gpioWaveDelete(wave_id)  # clean memory, gpioPulses dealloc themselves
+    # TODO Debug with print statements but don't actually output GPIO
 
     return retval
 
 ################## INTERNAL HELPER FUNCTIONS ################
 
 cdef inline int time_diff(timeval start, timeval end):
-    """ Calculate time in microseconds between 2 timeval structs."""
+    """ Calculate time in microseconds between 2 timeval structs. Deprecated."""
 
     return (end.tv_sec - start.tv_sec)*USEC_PER_SEC \
             + (end.tv_usec - start.tv_usec)
 
+
 cdef int read_switches_fast():
-    """ Read values of XY endstop switches and safety feet.
+    """ Checks if any of the switches were pressed. Only returns true or false
+    for speed.
 
-    This is the cdef only version, for faster reads.
-
-    :return: Bitwise 5-bit value for XMIN, XMAX, YMIN, YMAX, SAFE_FEET (LSB)
-            (i.e. 0b01001 => 9: YMAX, XMIN)
+    :return: True if a switch was pressed, otherwise false
     :rtype: int
     """
-    cdef int retval = 0
 
-    for pin in list_of_sw_pins:
-        retval |= (0 if gpioRead(SWS[pin]) else 1 )<< pin
-
-    return retval
+    return gpioRead_Bits_0_31() && switch_pin_mask

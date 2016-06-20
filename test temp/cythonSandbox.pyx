@@ -31,6 +31,8 @@ cdef extern from "pigpio.h":
     int gpioInitialise()
     int gpioTerminate()
 
+    unsigned gpioVersion()  # version number
+
     # GPIO functions
     int gpioSetMode(unsigned gpio, unsigned mode) # Set pin I or O
     int gpioGetMode(unsigned gpio)  # Reads GPIO mode
@@ -39,20 +41,42 @@ cdef extern from "pigpio.h":
     int gpioSetPullUpDown(unsigned gpio, unsigned pud)  # Sets pull up/down
     # vs bcm2835: missing set/clr functions, set/clr/write multi, interrupts
 
+    # Multi pin functions; Should only be needing pins 0-31
+    int gpioRead_Bits_0_31()
+    int gpioRead_Bits_32_53()
+    int gpioWrite_Bits_0_31_Clear(uint32_t bits)
+    int gpioWrite_Bits_32_53_Clear(uint32_t bits)
+    int gpioWrite_Bits_0_31_Set(uint32_t bits)
+    int gpioWrite_Bits_32_53_Set(uint32_t bits)
+
     # GPIO Wave functions
     int gpioWaveClear()
     int gpioWaveAddNew()
     int gpioWaveAddGeneric(unsigned numPulses, gpioPulse_t *pulses)
     int gpioWaveCreate()
     int gpioWaveGetPulses()
+    int gpioWaveGetHighPulses()
+    int gpioWaveGetMaxPulses()
     int gpioWaveGetCbs()
+    int gpioWaveGetHighCbs()
+    int gpioWaveGetMaxCbs()
     int gpioWaveGetMicros()
+    int gpioWaveGetHighMicros()
+    int gpioWaveGetMaxMicros()
+
+    # GPIO Wave sending functions
+    int gpioWaveTxSend(unsigned wave_id, unsigned wave_mode)
+    int gpioWaveChain(char *buf, unsigned bufSize)
+    int gpioWaveTxAt()
+    int gpioWaveTxBusy()
+    int gpioWaveTxStop()
 
     # Not included: SPI functions, I2C, serial
     # pigpio uses BCM pin numbering, not physical
 
     # Delays who knows how long lol
     uint32_t gpioDelay(uint32_t micros)  # delay micros
+
 
     # # Port function select modes for bcm2835_gpio_fsel()
     # int GPIO_INPUT "PI_INPUT "# = 0b000,   ///< Input
@@ -65,7 +89,7 @@ cdef extern from "pigpio.h":
     # int PUD_DOWN "PI_PUD_DOWN"
     # int PUD_UP "PI_PUD_UP"
 
-# Define vars
+# Define library vars
 cdef int USEC_PER_SEC = 1000000
 cdef int GPIO_INPUT = 0
 cdef int GPIO_OUTPUT = 1
@@ -73,6 +97,11 @@ cdef int GPIO_OUTPUT = 1
 cdef int PUD_OFF = 0
 cdef int PUD_DOW = 1
 cdef int PUD_UP = 2
+
+cdef int PI_WAVE_MODE_ONE_SHOT      = 0
+cdef int PI_WAVE_MODE_REPEAT        = 1
+cdef int PI_WAVE_MODE_ONE_SHOT_SYNC = 2
+cdef int PI_WAVE_MODE_REPEAT_SYNC   = 3
 
 ############# PIN DEFINITIONS #############
 
@@ -115,44 +144,67 @@ SWS[YMIN]   = 9  # _RPI_V2_GPIO_P1_21
 SWS[YMAX]   = 10  # _RPI_V2_GPIO_P1_19  # woops wires
 SWS[SAFE_FEET] = 11  # _RPI_V2_GPIO_P1_23  # woops active hi by accident
 # GND       = GPIO_25
-
 # 0, 1, 5, 6, 12, 13, 16, 19, 26, 20, 21 unused for sure
 
 def testScript():
-    if not gpioInitialise():
-        raise IOError
+    retval = gpioInitialise()
+    print retval
+    print gpioVersion()
 
     gpioSetMode(0, GPIO_OUTPUT)
     gpioSetMode(1, GPIO_OUTPUT)
 
-    cdef gpioPulse_t *pulse1
+    cdef gpioPulse_t *pulse
+    cdef gpioPulse_t *delay
     mem = Pool()
-    pulse1 = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
-    pulse1.usDelay = 500000
-    pulse1.gpioOn = 1 << 1
-    pulse1.gpioOff = 1 << 0
+    pulse = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
+    delay = <gpioPulse_t*> mem.alloc(1, sizeof(gpioPulse_t))
+    #delay = pulse
 
-    cdef gpioPulse_t *pulse2 = pulse1
+    pulse.usDelay = 1000000
+    pulse.gpioOn = 1 << 1
+    pulse.gpioOff = 1 << 0
+
+    delay.usDelay = 0
+    delay.gpioOn = 0
+    delay.gpioOff = 0
+
     # cdef int[:] pulse1 = array.array('i', [1 << 1, 1 << 0, 500000])
     # cdef int[:] pulse2 = array.array('i', [1 << 0, 1 << 1, 500000])
     #
     # cdef int[:,:] pulses = array.array('i', [[1 << 1, 1 << 0, 500000],
     #                                         [1 << 0, 1 << 1, 500000]])
 
-    print "pulse1.usDelay", pulse1.usDelay
-    print "pulse2.usDelay", pulse2.usDelay
+    print "pulse1.usDelay", pulse.usDelay
 
-    gpioWaveAddGeneric(2, [pulse1[0], pulse2[0]])
+    gpioWaveAddGeneric(2, [delay[0], pulse[0]])  # dereference gpioPulse pointer
     # waveid = gpioWaveCreate()
     # print waveid
     print "gpioWaveGetMicros", gpioWaveGetMicros()
+    print "gpioWaveGetPulses", gpioWaveGetPulses()
 
-    pulse1.usDelay = 250000
-    print "pulse1.usDelay", pulse1.usDelay
-    print "pulse2.usDelay", pulse2.usDelay
+    pulse.usDelay = 500000
+    pulse.gpioOn = 1 << 0
+    pulse.gpioOff = 1 << 1
+
+    delay.usDelay = 1000000
+    delay.gpioOn = 0
+    delay.gpioOff = 0
+
+    gpioWaveAddGeneric(2, [delay[0], pulse[0]])
     print "gpioWaveGetMicros", gpioWaveGetMicros()
+    print "gpioWaveGetPulses", gpioWaveGetPulses()
 
-    print EN
-    print MOT_A[EN]
+    waveid = gpioWaveCreate()
+    print "waveid", waveid
+
+    dma = gpioWaveTxSend(waveid, PI_WAVE_MODE_REPEAT)
+    print "dma", dma
+
+    gpioDelay(5*USEC_PER_SEC)
+
+    gpioWaveTxStop()
+
+    gpioWrite_Bits_0_31_Clear(0xffff)
 
     gpioTerminate()

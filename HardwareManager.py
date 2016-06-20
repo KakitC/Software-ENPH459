@@ -9,6 +9,7 @@ import numpy as np
 import HManHelper as HMH
 import hardwareDriver as hd
 # import hardwareDriverPigpio as hd
+import sys
 
 
 class HardwareManager(object):
@@ -42,7 +43,13 @@ class HardwareManager(object):
         self.mots_enabled = False
         self.x, self.y = 0.0, 0.0
         if hd.gpio_init() != 0:
-            raise IOError("GPIO not initialized correctly; Do you have root?")
+            if "hardwareDriverPigpio" in sys.modules.keys():
+                raise IOError("GPIO not initialized correctly; "
+                              "Is the pigpio daemon running? (ps -e)")
+            else:
+                raise IOError("GPIO not initialized correctly; "
+                              "Do you have root?")
+
 
 
     def __del__(self):
